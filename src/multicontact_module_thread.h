@@ -45,10 +45,13 @@ namespace walkman
         yarp::sig::Vector output;
         yarp::sig::Vector home;
         yarp::sig::Vector q_init;
+	RobotUtils::ftReadings ft_readings; // measures from force-torque sensors
         
         multicontact_msg msg;
         walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
         int recv_num=0;
+	
+	std::vector<std::string> available_cmds;
 
         double time = 0;
         double duration = 3.0;

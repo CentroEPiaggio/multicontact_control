@@ -21,6 +21,7 @@
 #include <iCub/iDynTree/yarp_kdl.h>
 #include "multicontact_module_thread.h"
 #include <kdl/frames_io.hpp>
+#include <idynutils/RobotUtils.h>
 
 using namespace yarp::math;
 using namespace yarp::os;
@@ -34,6 +35,15 @@ control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"
     output.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     home.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     q_init.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
+    
+    ft_readings = robot.senseftSensors(); // l_arm_ft, l_leg_ft, r_arm_ft, r_leg_ft
+     
+//     sample loop for printing ft readings
+//     for(std::map<std::string,yarp::sig::Vector>::iterator it = ft_readings.begin(); it!=ft_readings.end();++it){
+//         std::cout << it->first  << std::endl;
+// 	std::cout << ft_readings[it->first].toString() << std::endl;
+//     getchar();
+//     }
     
     yarp::sig::Vector q_right_arm(7,0.0);
     yarp::sig::Vector q_left_arm(7,0.0);
@@ -69,6 +79,8 @@ control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"
 
     robot.fromRobotToIdyn(q_right_arm,q_left_arm,q_torso,q_right_leg,q_left_leg,q_head,home);
 
+    // command list
+    available_cmds.push_back("idle");
 }
 
 bool multicontact_thread::custom_init()
@@ -98,7 +110,14 @@ void multicontact_thread::run()
     // get the command
     if(recv_interface.getCommand(msg,recv_num))
     {
-        std::cout<<"Command received: "<<msg.command<<std::endl;
+      if (std::find(available_cmds.begin(), available_cmds.end(), msg.command) != available_cmds.end())
+      {
+	std::cout<<"Command received: "<<msg.command<<std::endl;
+      }
+      else
+      {
+	std::cout<<"Unknown command: "<<msg.command<<std::endl;
+      }
     }
 
     control_law();
@@ -108,12 +127,18 @@ void multicontact_thread::run()
 
 void multicontact_thread::sense()
 {
+    // joint positions
     input = robot.sensePosition();
     model.updateiDyn3Model( input, true );
+    // ft sensors
+    ft_readings = robot.senseftSensors(); // l_arm_ft, l_leg_ft, r_arm_ft, r_leg_ft
 }
 
 void multicontact_thread::control_law()
 {
+  
+  
+  // filtro dq
   output = q_init;
 }
 
