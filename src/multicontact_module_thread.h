@@ -36,22 +36,6 @@
  **/
 namespace walkman
 {
-    class chain_data
-    {
-    public:
-        chain_data(std::string name);
-        void print();
-
-        std::string name;
-        std::string ee_link;
-        kinematic_chain* kin_chain;
-        trajectory_generator traj_gen;
-        KDL::Frame current_pose;
-        KDL::Frame desired_pose;
-        bool initialized;
-        bool done;
-    };
-
     class multicontact_thread : public control_thread
     {
     private:
