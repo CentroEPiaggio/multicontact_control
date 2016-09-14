@@ -46,18 +46,11 @@ namespace walkman
     class multicontact_thread : public control_thread
     {
     private:
-        void control_law();
+      
+	walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
 
-        yarp::sig::Vector input;
-        yarp::sig::Vector output;
-        yarp::sig::Vector home;
-        yarp::sig::Vector q_init;
-	
-	yarp::sig::Vector ft_l_ankle;
-	yarp::sig::Vector ft_r_ankle;
-	yarp::sig::Vector ft_l_wrist;
-	yarp::sig::Vector ft_r_wrist;
-	
+	wholebody_ik IK;
+
 	//
 	unsigned int size_q;
    
@@ -68,22 +61,25 @@ namespace walkman
     
     yarp::sig::Vector q_des;
     
-	// Variables for FT_sensor filtering
-	yarp::sig::Vector Sensor_Collection;
-        
+        		int WINDOW_size;
+
+		
 	yarp::sig::Matrix SENSORS_WINDOW ;
 	yarp::sig::Vector SENSORS_SUM ;
 	yarp::sig::Vector SENSORS_FILTERED ;
+	
+	yarp::sig::Vector ft_l_ankle;
+	yarp::sig::Vector ft_r_ankle;
+	yarp::sig::Vector ft_l_wrist;
+	yarp::sig::Vector ft_r_wrist;
+	
+	
     
-	int count_sensor;
-	int WINDOW_size;
-	//
-        multicontact_msg msg;
-        walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
-        int recv_num=0;
-	
-	
-	
+	// Variables for FT_sensor filtering
+	yarp::sig::Vector Sensor_Collection;
+        
+
+    
 // 	wb_interface wb_cmd; // interface for wholebody IK control
 	
 	// contact force vector section begin
@@ -113,38 +109,53 @@ namespace walkman
 
 	yarp::sig::Vector FC_to_world;
 
+	    yarp::sig::Vector fc_sense_left;
+    yarp::sig::Vector fc_sense_right;
+    yarp::sig::Vector fc_sense_left_hand;
+    yarp::sig::Vector fc_sense_right_hand;
+    
 	bool flag_robot = 1 ;
 	bool flag_simulator = 1-flag_robot ;
 	
 	           
-    unsigned int waist_index ;
-    unsigned int l_ankle_index ;
-    unsigned int l_c1_index ;
-    unsigned int l_c2_index ;
-    unsigned int l_c3_index ;
-    unsigned int l_c4_index ;
-    unsigned int r_ankle_index ;
-    unsigned int r_c1_index ;
-    unsigned int r_c2_index ;
-    unsigned int r_c3_index ;
-    unsigned int r_c4_index ;
-    unsigned int l_hand_index ;
-    unsigned int r_hand_index ;
-    unsigned int l_wrist_index ;
-    unsigned int l_hand_c1_index ;
-    unsigned int l_hand_c2_index ;
-    unsigned int l_hand_c3_index ;
-    unsigned int l_hand_c4_index ;
-    unsigned int r_wrist_index ;
-    unsigned int r_hand_c1_index ;
-    unsigned int r_hand_c2_index ;
-    unsigned int r_hand_c3_index ;
-    unsigned int r_hand_c4_index ;
+	int count_sensor;
+	//
+        multicontact_msg msg;
+        int recv_num=0;
+	
+	
+	void control_law();
+
+        yarp::sig::Vector input;
+        yarp::sig::Vector output;
+        yarp::sig::Vector home;
+        yarp::sig::Vector q_init;
+	
+    int waist_index ;
+    int l_ankle_index ;
+    int l_c1_index ;
+    int l_c2_index ;
+    int l_c3_index ;
+    int l_c4_index ;
+    int r_ankle_index ;
+    int r_c1_index ;
+    int r_c2_index ;
+    int r_c3_index ;
+    int r_c4_index ;
+    int l_hand_index ;
+    int r_hand_index ;
+    int l_wrist_index ;
+    int l_hand_c1_index ;
+    int l_hand_c2_index ;
+    int l_hand_c3_index ;
+    int l_hand_c4_index ;
+    int r_wrist_index ;
+    int r_hand_c1_index ;
+    int r_hand_c2_index ;
+    int r_hand_c3_index ;
+    int r_hand_c4_index ;
     
-    yarp::sig::Vector fc_sense_left;
-    yarp::sig::Vector fc_sense_right;
-    yarp::sig::Vector fc_sense_left_hand;
-    yarp::sig::Vector fc_sense_right_hand;
+
   
 	void contact_force_vector_computation();
 	// contact force vector section end
@@ -159,7 +170,6 @@ namespace walkman
         std::vector<std::string> available_commands;
         bool generate_poses_from_cmd();
 
-        wholebody_ik IK;
 	
 	double time = 0;
         double duration = 5.0;
