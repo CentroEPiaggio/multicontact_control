@@ -82,13 +82,12 @@ multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::R
 	fc_sense_right(12,0.0),
 	fc_sense_left_hand(12,0.0),
 	fc_sense_right_hand(12,0.0)
-  
 {
     input.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     output.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     home.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     q_init.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
-    
+
     yarp::sig::Vector q_right_arm(7,0.0);
     yarp::sig::Vector q_left_arm(7,0.0);
     yarp::sig::Vector q_torso(3,0.0);
@@ -108,15 +107,15 @@ multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::R
     q_left_arm[1]=  0.2;
     q_left_arm[3]= -1.2;
     q_left_arm[5]= -0.6;
-    
+
     q_torso[0] = 0.0;
     q_torso[1] = 0.0;
     q_torso[2] = 0.0;
- 
+
     q_right_leg[2]= -0.3;
     q_right_leg[3]=  0.6;
     q_right_leg[4]= -0.3;
-    
+
     q_left_leg[2]= -0.3;
     q_left_leg[3]=  0.6;
     q_left_leg[4]= -0.3;
@@ -133,10 +132,13 @@ bool multicontact_thread::custom_init()
     struct sched_param thread_param;
     thread_param.sched_priority = 99;
     pthread_setschedparam ( pthread_self(), SCHED_FIFO, &thread_param );
-    
+
     // setup
     model.iDyn3_model.setFloatingBaseLink(model.left_leg.end_effector_index);
     sense();
+
+    q_init = input;
+    
     output = input;
     robot.setPositionDirectMode();
 
@@ -149,10 +151,10 @@ bool multicontact_thread::custom_init()
 	//std::cout << " waiting for a keyboard input !!! " << std::endl ;
 	std::cin >> vai_01 ;
 //  //-------------------
-    
-    // Computation PINV for FT sensor processing  
-	waist_index   = model.iDyn3_model.getLinkIndex("Waist");  
-    l_ankle_index = model.iDyn3_model.getLinkIndex("l_leg_ft") ; 
+
+    // Computation PINV for FT sensor processing
+	waist_index   = model.iDyn3_model.getLinkIndex("Waist");
+    l_ankle_index = model.iDyn3_model.getLinkIndex("l_leg_ft") ;
     //     int l_ankle_index = model.iDyn3_model.getLinkIndex("l_foot_upper_left_link") ;
     l_c1_index    = model.iDyn3_model.getLinkIndex("l_foot_upper_left_link") ;
     l_c2_index    = model.iDyn3_model.getLinkIndex("l_foot_upper_right_link");
@@ -167,20 +169,20 @@ bool multicontact_thread::custom_init()
     r_c4_index    = model.iDyn3_model.getLinkIndex("r_foot_lower_right_link");
 
     l_hand_index  = model.iDyn3_model.getLinkIndex("LSoftHand");
-    r_hand_index  = model.iDyn3_model.getLinkIndex("RSoftHand");    
+    r_hand_index  = model.iDyn3_model.getLinkIndex("RSoftHand");
 
     l_wrist_index  = model.iDyn3_model.getLinkIndex("l_arm_ft") ;
     l_hand_c1_index = model.iDyn3_model.getLinkIndex("l_hand_upper_right_link");  // r_foot_upper_left_link
     l_hand_c2_index = model.iDyn3_model.getLinkIndex("l_hand_lower_right_link");  // r_foot_upper_right_link
     l_hand_c3_index = model.iDyn3_model.getLinkIndex("l_hand_upper_left_link");   // r_foot_lower_left_link
     l_hand_c4_index = model.iDyn3_model.getLinkIndex("l_hand_lower_left_link");  // r_foot_lower_right_link
-    //     
+    //
     r_wrist_index   = model.iDyn3_model.getLinkIndex("r_arm_ft") ;
     r_hand_c1_index = model.iDyn3_model.getLinkIndex("r_hand_upper_right_link");  // r_foot_upper_left_link
     r_hand_c2_index = model.iDyn3_model.getLinkIndex("r_hand_lower_right_link");  // r_foot_upper_right_link
     r_hand_c3_index = model.iDyn3_model.getLinkIndex("r_hand_upper_left_link");   // r_foot_lower_left_link
     r_hand_c4_index = model.iDyn3_model.getLinkIndex("r_hand_lower_left_link");  // r_foot_lower_right_link
-      
+
     map_l_fcToSens_PINV = locoman::utils::Pinv_trunc_SVD( locoman::utils::fConToSens( l_ankle_index, 
 																					  l_c1_index  , 
 																					  l_c2_index  ,
@@ -270,31 +272,30 @@ bool multicontact_thread::custom_init()
 	std::cin >> vai_1 ;
 //  //-------------------
 	read_offset_q();
-  
-	// TODO
+
+// TODO
 	// filling sensors window
-  
 }
 
 void multicontact_thread::read_offset_q(){
 	// offset on q
 	// q_ Offset Evaluation Section
-	int dim_offeset = 1000    ; 
+	int dim_offeset = 1000;
 	yarp::sig::Matrix offset_window(locoman::utils::getNumberOfKinematicJoints(robot), dim_offeset);
 	q_current.zero();
 	for(int k=0; k<dim_offeset ; k++ ){
-		q_current += locoman::utils::sense_position_no_hands(robot); //if sense returns motorPosition       
-		usleep(1*1000) ;  
-	}   
-	q_current = q_current/dim_offeset ;  
-  
+		q_current += locoman::utils::sense_position_no_hands(robot); //if sense returns motorPosition
+		usleep(1*1000) ;
+	}
+	q_current = q_current/dim_offeset ;
+
 	// yarp::sig::Vector q_motor_init = q_des  ;
 	q_offset = q_des - q_current ;
 	// end of the Homing Section
-  
+
 	q_sense =  locoman::utils::senseMotorPosition(robot, flag_robot) ;
-	q_current = q_sense + q_offset ; 
-	std::cout << " final error offset =  " <<  norm(q_current - q_des) << std::endl;     
+	q_current = q_sense + q_offset ;
+	std::cout << " final error offset =  " <<  norm(q_current - q_des) << std::endl;
 
 }
 
@@ -303,16 +304,16 @@ void multicontact_thread::send_to_service2() {
 }
 
 void multicontact_thread::run()
-{   
+{
     sense();
 
     send_to_service2();
-    
+
     // get the command
     if(recv_interface.getCommand(msg,recv_num))
     {
 //       if(wb_cmd.parse_cmd(msg)) {
-// 	
+//
 //       } else {
 // 	std::cout << "Something bad happened" << std::endl;
 //       }
@@ -330,28 +331,28 @@ void multicontact_thread::sense()
     model.updateiDyn3Model( input, true );
     // ft sensors
     //Getting Force/Torque Sensor Measures
-    if(!robot.senseftSensor("l_leg_ft", ft_l_ankle)) std::cout << "ERROR READING SENSOR l_ankle" << std::endl; 
-    if(!robot.senseftSensor("r_leg_ft", ft_r_ankle)) std::cout << "ERROR READING SENSOR r_ankle" << std::endl;     
-    if(!robot.senseftSensor("l_arm_ft", ft_l_wrist)) std::cout << "ERROR READING SENSOR l_wrist" << std::endl; 
-    if(!robot.senseftSensor("r_arm_ft", ft_r_wrist)) std::cout << "ERROR READING SENSOR r_wrist" << std::endl;    
-    
+    if(!robot.senseftSensor("l_leg_ft", ft_l_ankle)) std::cout << "ERROR READING SENSOR l_ankle" << std::endl;
+    if(!robot.senseftSensor("r_leg_ft", ft_r_ankle)) std::cout << "ERROR READING SENSOR r_ankle" << std::endl;
+    if(!robot.senseftSensor("l_arm_ft", ft_l_wrist)) std::cout << "ERROR READING SENSOR l_wrist" << std::endl;
+    if(!robot.senseftSensor("r_arm_ft", ft_r_wrist)) std::cout << "ERROR READING SENSOR r_wrist" << std::endl;
+
 	// Filtering The Sensors
 	Sensor_Collection.setSubvector(0, ft_l_ankle )   ;
 	Sensor_Collection.setSubvector(6, ft_r_ankle )   ;
 	Sensor_Collection.setSubvector(12, ft_l_wrist )  ;
 	Sensor_Collection.setSubvector(18, ft_r_wrist )  ;
-  
+
 	// HACK to prevent disturbances from FT_sensors
 	Sensor_Collection[0]=0.0 ;
 	Sensor_Collection[1]=0.0 ;
 	Sensor_Collection[6]=0.0 ;
 	Sensor_Collection[7]=0.0 ;
-  
-	std::cout << "Sensor_Collection = "  << Sensor_Collection.toString() << std::endl ;  
+
+	std::cout << "Sensor_Collection = "  << Sensor_Collection.toString() << std::endl;
 
 	count_sensor = count_sensor% WINDOW_size ;
 	SENSORS_WINDOW.setCol( count_sensor , Sensor_Collection ) ;
-	SENSORS_SUM = SENSORS_SUM + Sensor_Collection -1.0 * SENSORS_WINDOW.getCol((count_sensor+ 1)%WINDOW_size) ; 
+	SENSORS_SUM = SENSORS_SUM + Sensor_Collection -1.0 * SENSORS_WINDOW.getCol((count_sensor+ 1)%WINDOW_size);
 	SENSORS_FILTERED = SENSORS_SUM / (WINDOW_size-1.0) ;
 	count_sensor += 1 ;
 }
@@ -359,7 +360,7 @@ void multicontact_thread::sense()
 void multicontact_thread::contact_force_vector_computation() {
 	//---------------------------------------------------------------------------------------------------------
 	// Contact Force Vector Computation Section
-  
+
 	// FEET
 	fc_l_c_to_world = map_l_fcToSens_PINV * SENSORS_FILTERED.subVector(  0,5  ) ; //ft_l_ankle  ;  // yarp::math::pinv( map_l_fcToSens, 1E-6)  *  ft_l_ankle     ;
 	fc_r_c_to_world = map_r_fcToSens_PINV * SENSORS_FILTERED.subVector(  6,11 ) ; //ft_r_ankle  ;    
