@@ -279,6 +279,8 @@ bool multicontact_thread::custom_init()
 // TODO
 	// filling sensors window
 	
+	
+	setup_wb_ik();
 	return true;
 }
 
@@ -423,16 +425,17 @@ void multicontact_thread::contact_force_vector_computation() {
 
 void multicontact_thread::control_law()
 {
+  if(true) {
     control_law_ik();
-  
+  } else {
+    output = q_init;
+  }
 //   if(wb_cmd.going_to_initial_position) {
 //     wb_cmd.compute_q(time,output);
 //   } else {
 //     wb_cmd.get_q(output);
 //   }
     
-	// filtro dq
-	output = q_init;
 }
 
 void multicontact_thread::move()
