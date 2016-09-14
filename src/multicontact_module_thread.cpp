@@ -137,7 +137,7 @@ bool multicontact_thread::custom_init()
     // setup
     model.iDyn3_model.setFloatingBaseLink(model.left_leg.end_effector_index);
     sense();
-
+    
     q_init = input;
     
     output = input;
@@ -153,7 +153,7 @@ bool multicontact_thread::custom_init()
 	std::cout << " Put the Robot UP on the terrain and press a key !!! " << std::endl ;
 	//std::cout << " waiting for a keyboard input !!! " << std::endl ;
 	std::cin >> vai_01 ;
-//  //-------------------
+	//-------------------
 
     // Computation PINV for FT sensor processing
 	waist_index   = model.iDyn3_model.getLinkIndex("Waist");
@@ -278,6 +278,8 @@ bool multicontact_thread::custom_init()
 
 // TODO
 	// filling sensors window
+	
+	return true;
 }
 
 void multicontact_thread::read_offset_q(){
@@ -312,6 +314,7 @@ void multicontact_thread::read_from_service2() {
 
 void multicontact_thread::run()
 {
+	
     sense();
 
     send_to_service2();
@@ -367,7 +370,7 @@ void multicontact_thread::sense()
 	Sensor_Collection[6]=0.0 ;
 	Sensor_Collection[7]=0.0 ;
 
-	std::cout << "Sensor_Collection = "  << Sensor_Collection.toString() << std::endl;
+// 	std::cout << "Sensor_Collection = "  << Sensor_Collection.toString() << std::endl;
 
 	count_sensor = count_sensor% WINDOW_size ;
 	SENSORS_WINDOW.setCol( count_sensor , Sensor_Collection ) ;
@@ -420,7 +423,8 @@ void multicontact_thread::contact_force_vector_computation() {
 
 void multicontact_thread::control_law()
 {
-  control_law_ik();
+    control_law_ik();
+  
 //   if(wb_cmd.going_to_initial_position) {
 //     wb_cmd.compute_q(time,output);
 //   } else {
