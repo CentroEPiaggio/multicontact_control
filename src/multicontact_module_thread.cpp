@@ -23,6 +23,10 @@
 #include <kdl/frames_io.hpp>
 #include <idynutils/RobotUtils.h>
 
+#include <yarp/math/Math.h>
+#include <yarp/math/SVD.h>
+
+
 using namespace yarp::math;
 using namespace yarp::os;
 using namespace yarp::sig;
@@ -30,17 +34,58 @@ using namespace walkman;
 
 multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::ResourceFinder rf, std::shared_ptr< paramHelp::ParamHelperServer > ph):
 control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"),
+// size of q vectors
+size_q(locoman::utils::getNumberOfKinematicJoints(robot)),
+   
+   // q_senseRefFeedback(size_q, 0.0) ,  // this should be removed
+     
+    q_sense(size_q,0.0),
+    q_current(size_q, 0.0),
+    q_offset(size_q, 0.0),   // q_current = q_sense + q_offset
+    q_des(size_q, 0.0),
 // for FT_sensors filtering
 WINDOW_size(5),
 SENSORS_WINDOW(24,WINDOW_size),
 SENSORS_SUM(24, 0.0), 
 SENSORS_FILTERED(24, 0.0),
+//
+ft_l_ankle(6,0.0),
+	ft_r_ankle(6,0.0),
+	ft_l_wrist(6,0.0),
+	ft_r_wrist(6,0.0),
+	Sensor_Collection(24,0.0),
+
+fc_l_c_to_world(12,0.0),
+fc_r_c_to_world(12,0.0) ,
+fc_feet_to_world(24,0.0) ,
+
+fc_l_c_hand_to_world(12,0.0)  ,
+fc_r_c_hand_to_world(12,0.0)  ,
+fc_hand_to_world(24,0.0) ,
 // for contact force vector calculation
 map_l_fcToSens_PINV(12,6) ,
 map_r_fcToSens_PINV(12,6) ,
 map_l_hand_fcToSens_PINV(12,6) ,
-map_r_hand_fcToSens_PINV(12,6)
-//
+map_r_hand_fcToSens_PINV(12,6) ,
+
+fc_offset_left(12,0.0) ,
+fc_offset_right(12,0.0) ,
+
+fc_offset_left_hand(12,0.0) ,
+fc_offset_right_hand(12,0.0) ,
+
+fc_current_left(12,0.0) ,//= fc_sense_left  - fc_offset_left ,
+fc_current_right(12,0.0) ,//= fc_sense_right - fc_offset_right , 
+fc_current_left_hand(12,0.0) ,// = fc_sense_left_hand  - fc_offset_left_hand  , 
+fc_current_right_hand(12,0.0) ,//= fc_sense_right_hand - fc_offset_right_hand  ,  
+
+FC_to_world(48,0.0) ,
+
+fc_sense_left(12,0.0),
+fc_sense_right(12,0.0),
+fc_sense_left_hand(12,0.0),
+fc_sense_right_hand(12,0.0)
+  
 {
     input.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     output.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
@@ -82,7 +127,7 @@ map_r_hand_fcToSens_PINV(12,6)
     robot.fromRobotToIdyn(q_right_arm,q_left_arm,q_torso,q_right_leg,q_left_leg,q_head,home);
 
     // populate command list
-    wb_cmd.add_command("idle");
+//     wb_cmd.add_command("idle");
 }
 
 bool multicontact_thread::custom_init()
@@ -254,8 +299,7 @@ void multicontact_thread::read_offset_q(){
   q_sense =  locoman::utils::senseMotorPosition(robot, flag_robot) ;
   q_current = q_sense + q_offset ; 
   std::cout << " final error offset =  " <<  norm(q_current - q_des) << std::endl;     
-  
-    return true;
+
 }
 
 void multicontact_thread::send_to_service2() {
@@ -271,11 +315,11 @@ void multicontact_thread::run()
     // get the command
     if(recv_interface.getCommand(msg,recv_num))
     {
-      if(wb_cmd.parse_cmd(msg)) {
-	
-      } else {
-	std::cout << "Something bad happened" << std::endl;
-      }
+//       if(wb_cmd.parse_cmd(msg)) {
+// 	
+//       } else {
+// 	std::cout << "Something bad happened" << std::endl;
+//       }
     }
 
     control_law();

@@ -32,12 +32,8 @@
 
 #include <wb_interface/wb_interface.h>
 
-#include <locoman/utils/algebra.hpp>
 #include <locoman/utils/declarations.h>
-#include <locoman/utils/kinematics.hpp>
-#include <locoman/utils/kinetostatics.hpp>
-#include <locoman/utils/locoman_utils.hpp>
-#include <locoman/utils/screws.hpp>
+
 
 /**
  * @brief multicontact control thread
@@ -54,12 +50,23 @@ namespace walkman
         yarp::sig::Vector output;
         yarp::sig::Vector home;
         yarp::sig::Vector q_init;
-	yarp::sig::Vector ft_l_ankle(6,0.0);
-	yarp::sig::Vector ft_r_ankle(6,0.0);
-	yarp::sig::Vector ft_l_wrist(6,0.0);
-	yarp::sig::Vector ft_r_wrist(6,0.0);
+	yarp::sig::Vector ft_l_ankle;
+	yarp::sig::Vector ft_r_ankle;
+	yarp::sig::Vector ft_l_wrist;
+	yarp::sig::Vector ft_r_wrist;
+	
+	//
+	unsigned int size_q;
+   
+     
+    yarp::sig::Vector q_sense;
+    yarp::sig::Vector q_current;
+    yarp::sig::Vector q_offset;   // q_current = q_sense + q_offset
+    
+    yarp::sig::Vector q_des;
+    
 	// Variables for FT_sensor filtering
-	yarp::sig::Vector Sensor_Collection(24,0.0);
+	yarp::sig::Vector Sensor_Collection;
         
 	yarp::sig::Matrix SENSORS_WINDOW ;
 	yarp::sig::Vector SENSORS_SUM ;
@@ -76,34 +83,34 @@ namespace walkman
         double time = 0;
         double duration = 3.0;
 	
-	wb_interface wb_cmd; // interface for wholebody IK control
+// 	wb_interface wb_cmd; // interface for wholebody IK control
 	
 	// contact force vector section begin
-	yarp::sig::Vector fc_l_c_to_world(12,0.0) ; 
-	yarp::sig::Vector fc_r_c_to_world(12,0.0) ;
-	yarp::sig::Vector fc_feet_to_world(24,0.0) ;
+	yarp::sig::Vector fc_l_c_to_world; 
+	yarp::sig::Vector fc_r_c_to_world;
+	yarp::sig::Vector fc_feet_to_world;
 	
-	yarp::sig::Vector fc_l_c_hand_to_world(12,0.0)  ;
-	yarp::sig::Vector fc_r_c_hand_to_world(12,0.0)  ;
-	yarp::sig::Vector fc_hand_to_world(24,0.0) ;
+	yarp::sig::Vector fc_l_c_hand_to_world;
+	yarp::sig::Vector fc_r_c_hand_to_world;
+	yarp::sig::Vector fc_hand_to_world;
 	
-	yarp::sig::Matrix map_l_fcToSens_PINV(12,6) ;
-	yarp::sig::Matrix map_r_fcToSens_PINV(12,6) ;
-	yarp::sig::Matrix map_l_hand_fcToSens_PINV(12,6) ;
-	yarp::sig::Matrix map_r_hand_fcToSens_PINV(12,6) ;
+	yarp::sig::Matrix map_l_fcToSens_PINV;
+	yarp::sig::Matrix map_r_fcToSens_PINV;
+	yarp::sig::Matrix map_l_hand_fcToSens_PINV;
+	yarp::sig::Matrix map_r_hand_fcToSens_PINV;
 	
-	yarp::sig::Vector fc_offset_left(12,0.0) ;
-	yarp::sig::Vector fc_offset_right(12,0.0) ;
+	yarp::sig::Vector fc_offset_left;
+	yarp::sig::Vector fc_offset_right;
     
-	yarp::sig::Vector fc_offset_left_hand(12,0.0) ;
-	yarp::sig::Vector fc_offset_right_hand(12,0.0) ;
+	yarp::sig::Vector fc_offset_left_hand;
+	yarp::sig::Vector fc_offset_right_hand;
 	
-	yarp::sig::Vector fc_current_left(12,0.0) ;//= fc_sense_left  - fc_offset_left ;
-	yarp::sig::Vector fc_current_right(12,0.0) ;//= fc_sense_right - fc_offset_right ; 
-	yarp::sig::Vector fc_current_left_hand(12,0.0) ;// = fc_sense_left_hand  - fc_offset_left_hand  ; 
-	yarp::sig::Vector fc_current_right_hand(12,0.0) ;//= fc_sense_right_hand - fc_offset_right_hand  ;  
+	yarp::sig::Vector fc_current_left;
+	yarp::sig::Vector fc_current_right;
+	yarp::sig::Vector fc_current_left_hand;
+	yarp::sig::Vector fc_current_right_hand;
 
-	yarp::sig::Vector FC_to_world(48,0.0) ;
+	yarp::sig::Vector FC_to_world;
 
 	bool flag_robot = 1 ;
 	bool flag_simulator = 1-flag_robot ;
@@ -133,10 +140,10 @@ namespace walkman
     unsigned int r_hand_c3_index ;
     unsigned int r_hand_c4_index ;
     
-    yarp::sig::Vector fc_sense_left(12,0.0);
-    yarp::sig::Vector fc_sense_right(12,0.0);
-    yarp::sig::Vector fc_sense_left_hand(12,0.0);
-    yarp::sig::Vector fc_sense_right_hand(12,0.0);
+    yarp::sig::Vector fc_sense_left;
+    yarp::sig::Vector fc_sense_right;
+    yarp::sig::Vector fc_sense_left_hand;
+    yarp::sig::Vector fc_sense_right_hand;
   
 	void contact_force_vector_computation();
 	// contact force vector section end
