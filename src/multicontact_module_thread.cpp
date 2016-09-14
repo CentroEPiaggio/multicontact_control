@@ -137,10 +137,10 @@ bool multicontact_thread::custom_init()
     // setup
     model.iDyn3_model.setFloatingBaseLink(model.left_leg.end_effector_index);
     sense();
-    
+    output = input = robot.sensePosition();
+
     q_init = input;
     
-    output = input;
     robot.setPositionDirectMode();
 
     // initial position
@@ -351,7 +351,7 @@ void multicontact_thread::run()
 void multicontact_thread::sense()
 {
     // joint positions
-    input = robot.sensePosition();
+    input = output; // robot.sensePosition(); // FIXME
     model.updateiDyn3Model( input, true );
     // ft sensors
     //Getting Force/Torque Sensor Measures
