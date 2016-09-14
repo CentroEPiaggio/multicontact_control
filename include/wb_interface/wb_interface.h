@@ -6,7 +6,7 @@
 
 class wb_interface {
 private:
-wholebody_ik IK;
+wholebody_ik* IK;
 
 std::vector<std::string> available_cmds;
 
