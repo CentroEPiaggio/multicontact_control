@@ -29,21 +29,23 @@ using namespace yarp::sig;
 using namespace walkman;
 
 multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::ResourceFinder rf, std::shared_ptr< paramHelp::ParamHelperServer > ph):
-control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface")
+control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"),
+// for FT_sensors filtering
+WINDOW_size(5),
+SENSORS_WINDOW(24,WINDOW_size),
+SENSORS_SUM(24, 0.0), 
+SENSORS_FILTERED(24, 0.0),
+// for contact force vector calculation
+map_l_fcToSens_PINV(12,6) ,
+map_r_fcToSens_PINV(12,6) ,
+map_l_hand_fcToSens_PINV(12,6) ,
+map_r_hand_fcToSens_PINV(12,6)
+//
 {
     input.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     output.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     home.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     q_init.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
-    
-    ft_readings = robot.senseftSensors(); // l_arm_ft, l_leg_ft, r_arm_ft, r_leg_ft
-     
-//     sample loop for printing ft readings
-//     for(std::map<std::string,yarp::sig::Vector>::iterator it = ft_readings.begin(); it!=ft_readings.end();++it){
-//         std::cout << it->first  << std::endl;
-// 	std::cout << ft_readings[it->first].toString() << std::endl;
-//     getchar();
-//     }
     
     yarp::sig::Vector q_right_arm(7,0.0);
     yarp::sig::Vector q_left_arm(7,0.0);
@@ -79,8 +81,8 @@ control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"
 
     robot.fromRobotToIdyn(q_right_arm,q_left_arm,q_torso,q_right_leg,q_left_leg,q_head,home);
 
-    // command list
-    available_cmds.push_back("idle");
+    // populate command list
+    wb_cmd.add_command("idle");
 }
 
 bool multicontact_thread::custom_init()
@@ -98,6 +100,8 @@ bool multicontact_thread::custom_init()
 
 
     std::cout<<" - Initialized"<<std::endl;
+    
+    // TODO sensor force biasing
 
     return true;
 }
@@ -110,20 +114,17 @@ void multicontact_thread::run()
     // get the command
     if(recv_interface.getCommand(msg,recv_num))
     {
-      if (std::find(available_cmds.begin(), available_cmds.end(), msg.command) != available_cmds.end())
-      {
-	std::cout<<"Command received: "<<msg.command<<std::endl;
-      }
-      else
-      {
-	std::cout<<"Unknown command: "<<msg.command<<std::endl;
+      if(wb_cmd.parse_cmd(msg)) {
+	
+      } else {
+	std::cout << "Something bad happened" << std::endl;
       }
     }
 
     control_law();
 
     move();
-}    
+}
 
 void multicontact_thread::sense()
 {
@@ -131,13 +132,83 @@ void multicontact_thread::sense()
     input = robot.sensePosition();
     model.updateiDyn3Model( input, true );
     // ft sensors
-    ft_readings = robot.senseftSensors(); // l_arm_ft, l_leg_ft, r_arm_ft, r_leg_ft
+    //Getting Force/Torque Sensor Measures
+    if(!robot.senseftSensor("l_leg_ft", ft_l_ankle)) std::cout << "ERROR READING SENSOR l_ankle" << std::endl; 
+    if(!robot.senseftSensor("r_leg_ft", ft_r_ankle)) std::cout << "ERROR READING SENSOR r_ankle" << std::endl;     
+    if(!robot.senseftSensor("l_arm_ft", ft_l_wrist)) std::cout << "ERROR READING SENSOR l_wrist" << std::endl; 
+    if(!robot.senseftSensor("r_arm_ft", ft_r_wrist)) std::cout << "ERROR READING SENSOR r_wrist" << std::endl;    
+    
+    // TODO Filtering
+  // Filtering The Sensors
+  Sensor_Collection.setSubvector(0, ft_l_ankle )   ;
+  Sensor_Collection.setSubvector(6, ft_r_ankle )   ;
+  Sensor_Collection.setSubvector(12, ft_l_wrist )  ;
+  Sensor_Collection.setSubvector(18, ft_r_wrist )  ;
+  
+  // HACK to prevent disturbances from FT_sensors
+  Sensor_Collection[0]=0.0 ;
+  Sensor_Collection[1]=0.0 ;
+  Sensor_Collection[6]=0.0 ;
+  Sensor_Collection[7]=0.0 ;
+  
+  std::cout << "Sensor_Collection = "  << Sensor_Collection.toString() << std::endl ;  
+
+  count_sensor = count_sensor% WINDOW_size ;
+  SENSORS_WINDOW.setCol( count_sensor , Sensor_Collection ) ;
+  SENSORS_SUM = SENSORS_SUM + Sensor_Collection -1.0 * SENSORS_WINDOW.getCol((count_sensor+ 1)%WINDOW_size) ; 
+  SENSORS_FILTERED = SENSORS_SUM / (WINDOW_size-1.0) ;
+  count_sensor += 1 ;
+}
+
+void multicontact_thread::contact_force_vector_computation() {
+  //---------------------------------------------------------------------------------------------------------
+  // Contact Force Vector Computation Section
+  
+  // FEET
+  fc_l_c_to_world = map_l_fcToSens_PINV * SENSORS_FILTERED.subVector(  0,5  ) ; //ft_l_ankle  ;  // yarp::math::pinv( map_l_fcToSens, 1E-6)  *  ft_l_ankle     ;
+  fc_r_c_to_world = map_r_fcToSens_PINV * SENSORS_FILTERED.subVector(  6,11 ) ; //ft_r_ankle  ;    
+
+  if(  !(flag_robot ==1  && robot.idynutils.getRobotName() == "bigman")  ){  // Changing the sign again if we are not on the walkman real robot
+	fc_l_c_to_world  = -1.0*fc_l_c_to_world ;                  // in the walkman (real) robot the feet sensors provide to_wolrd measures
+	fc_r_c_to_world  = -1.0*fc_r_c_to_world ; 
+  }
+ 
+  fc_current_left  = fc_l_c_to_world  - fc_offset_left   ; 
+  fc_current_right = fc_r_c_to_world - fc_offset_right  ; 
+  
+  fc_feet_to_world.setSubvector(0, fc_current_left ) ;
+  fc_feet_to_world.setSubvector(fc_current_right.length(), fc_r_c_to_world ) ; 
+    
+  //-------------------------------
+  // HANDS
+  fc_l_c_hand_to_world = map_l_hand_fcToSens_PINV * SENSORS_FILTERED.subVector( 12,17 ); //ft_l_wrist  ;  // TODO :  verifica segno su sim e su robot
+  fc_r_c_hand_to_world = map_r_hand_fcToSens_PINV * SENSORS_FILTERED.subVector( 18,23 ); //ft_r_wrist  ;  // yarp::math::pinv( map_r_fcToSens, 1E-6)  *  ft_r_ankle     ;
+  
+  if(  !(flag_robot ==1  && robot.idynutils.getRobotName() == "bigman")  ){  // Changing the sign again if we are not on the walkman real robot
+      fc_l_c_hand_to_world  = -1.0*fc_l_c_hand_to_world ;                  // in the walkman (real) robot the feet sensors provide to_wolrd measures
+      fc_r_c_hand_to_world  = -1.0*fc_r_c_hand_to_world ; 
+  }
+  
+  fc_l_c_hand_to_world -= fc_offset_left_hand  ;
+  fc_r_c_hand_to_world -= fc_offset_right_hand ;
+  //
+  fc_hand_to_world.setSubvector(0, fc_l_c_hand_to_world ) ;
+  fc_hand_to_world.setSubvector(fc_l_c_hand_to_world.length(), fc_r_c_hand_to_world ) ;  
+  //---------------------------
+  
+  FC_to_world.setSubvector(0, fc_feet_to_world) ;
+  FC_to_world.setSubvector(fc_feet_to_world.length(), fc_hand_to_world) ;  
+
+  // End of Contact Force Vector Computation Section
 }
 
 void multicontact_thread::control_law()
 {
   
-  
+  if(wb_cmd.going_to_initial_position) {
+    wb_cmd.compute_q(time,output);
+  }
+    
   // filtro dq
   output = q_init;
 }
