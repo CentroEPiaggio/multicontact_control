@@ -30,9 +30,11 @@
 
 #include <vector>
 
-#include <wb_interface/wb_interface.h>
-
 #include <locoman/utils/declarations.h>
+
+#include <wholebody_ik/wholebody_ik.h>
+#include <drc_shared/yarp_msgs/multicontact_msg.h>
+#include <trajectory_generator/trajectory_generator.h>
 
 
 /**
@@ -50,6 +52,7 @@ namespace walkman
         yarp::sig::Vector output;
         yarp::sig::Vector home;
         yarp::sig::Vector q_init;
+	
 	yarp::sig::Vector ft_l_ankle;
 	yarp::sig::Vector ft_r_ankle;
 	yarp::sig::Vector ft_l_wrist;
@@ -79,9 +82,7 @@ namespace walkman
         walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
         int recv_num=0;
 	
-
-        double time = 0;
-        double duration = 3.0;
+	
 	
 // 	wb_interface wb_cmd; // interface for wholebody IK control
 	
@@ -149,6 +150,39 @@ namespace walkman
 	// contact force vector section end
 	
 	void read_offset_q();
+	
+	// from wb_ik thread module
+	//
+	void go_in_initial_position();
+        bool going_to_initial_position=false;
+
+        std::vector<std::string> available_commands;
+        bool generate_poses_from_cmd();
+
+        wholebody_ik IK;
+	
+	double time = 0;
+        double duration = 5.0;
+	
+	double square_duration;
+	double exec_time;
+
+	std::vector<std::string> chains;
+	std::map<std::string,std::string> base_frames;
+	std::map<std::string,int> base_indeces;
+	std::string current_chain;
+
+	std::vector<std::string> ee_names;
+	std::map<std::string,int> ee_indeces;
+	std::map<std::string,KDL::Frame> initial_poses;
+	std::map<std::string,KDL::Frame> next_poses;
+	std::map<std::string,trajectory_generator> traj_gens;
+	std::map<std::string,int> traj_types;
+	std::map<std::string,bool> initialized;
+	bool done = false;
+
+	void reset_traj_types();
+	//
     public:
         /**
         * @brief constructor
@@ -186,6 +220,21 @@ namespace walkman
             * @brief send sensor data to locoman service 2
             */
 	void send_to_service2();
+	
+	/**
+	 * @brief read dq from locoman service 2
+	 */
+	void read_from_service2(); 
+	
+	/**
+	 * @brief control law purely based on wholebody inverse kinematics
+	 */
+	void control_law_ik();
+	
+	/**
+	 * @brief setup attributes for wholebody_ik control
+	 */
+	void setup_wb_ik();
     };
 }
 
