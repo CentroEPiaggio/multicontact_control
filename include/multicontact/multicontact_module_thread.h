@@ -32,6 +32,12 @@
 
 #include <wb_interface/wb_interface.h>
 
+#include <locoman/utils/algebra.hpp>
+#include <locoman/utils/declarations.h>
+#include <locoman/utils/kinematics.hpp>
+#include <locoman/utils/kinetostatics.hpp>
+#include <locoman/utils/locoman_utils.hpp>
+#include <locoman/utils/screws.hpp>
 
 /**
  * @brief multicontact control thread
@@ -101,9 +107,41 @@ namespace walkman
 
 	bool flag_robot = 1 ;
 	bool flag_simulator = 1-flag_robot ;
+	
+	           
+    unsigned int waist_index ;
+    unsigned int l_ankle_index ;
+    unsigned int l_c1_index ;
+    unsigned int l_c2_index ;
+    unsigned int l_c3_index ;
+    unsigned int l_c4_index ;
+    unsigned int r_ankle_index ;
+    unsigned int r_c1_index ;
+    unsigned int r_c2_index ;
+    unsigned int r_c3_index ;
+    unsigned int r_c4_index ;
+    unsigned int l_hand_index ;
+    unsigned int r_hand_index ;
+    unsigned int l_wrist_index ;
+    unsigned int l_hand_c1_index ;
+    unsigned int l_hand_c2_index ;
+    unsigned int l_hand_c3_index ;
+    unsigned int l_hand_c4_index ;
+    unsigned int r_wrist_index ;
+    unsigned int r_hand_c1_index ;
+    unsigned int r_hand_c2_index ;
+    unsigned int r_hand_c3_index ;
+    unsigned int r_hand_c4_index ;
     
+    yarp::sig::Vector fc_sense_left(12,0.0);
+    yarp::sig::Vector fc_sense_right(12,0.0);
+    yarp::sig::Vector fc_sense_left_hand(12,0.0);
+    yarp::sig::Vector fc_sense_right_hand(12,0.0);
+  
 	void contact_force_vector_computation();
 	// contact force vector section end
+	
+	void read_offset_q();
     public:
         /**
         * @brief constructor
@@ -136,6 +174,11 @@ namespace walkman
             * @brief move function
             */
         void move();
+	
+	/**
+            * @brief send sensor data to locoman service 2
+            */
+	void send_to_service2();
     };
 }
 
