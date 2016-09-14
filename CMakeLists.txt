@@ -89,7 +89,7 @@ file(GLOB_RECURSE INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include" *.h)
 
 add_subdirectory(app)
 
-ADD_EXECUTABLE(multicontact_module src/multicontact_module_main.cpp src/multicontact_module_thread.cpp)
+ADD_EXECUTABLE(multicontact_module src/multicontact_module_main.cpp src/multicontact_module_thread.cpp src/utils/utils.cpp src/wb_interface/wb_interface.cpp)
                                
 TARGET_LINK_LIBRARIES(multicontact_module ${wholebody_ik_LIBRARIES} ${iDynTree_LIBRARIES}
                                       ${YARP_LIBRARIES}
@@ -99,3 +99,4 @@ TARGET_LINK_LIBRARIES(multicontact_module ${wholebody_ik_LIBRARIES} ${iDynTree_L
                                       )
 
 install(TARGETS multicontact_module DESTINATION bin)
+
