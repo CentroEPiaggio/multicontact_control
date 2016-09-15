@@ -82,7 +82,8 @@ multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::R
 	fc_sense_left(12,0.0),
 	fc_sense_right(12,0.0),
 	fc_sense_left_hand(12,0.0),
-	fc_sense_right_hand(12,0.0)
+	fc_sense_right_hand(12,0.0),
+        Big_Rf_new(48, 37) 
 {
     input.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     output.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
@@ -129,6 +130,7 @@ multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::R
 
 bool multicontact_thread::custom_init()
 {
+  run_counter = 0 ;
     //  real time thread
     struct sched_param thread_param;
     thread_param.sched_priority = 99;
@@ -144,19 +146,34 @@ bool multicontact_thread::custom_init()
     robot.setPositionDirectMode();
 
     // initial position
-    go_in_initial_position();
+    // go_in_initial_position();
+
+   //--------------------------------------------------------------------------------------------------------------
+   // YARP Port Section - SEND
+   if(!sending_q.open(std::string("/" + get_module_prefix() + "/sending_q"))) {
+        std::cout << "ERROR: cannot open YARP port " << std::string(get_module_prefix() + "/sending_q") << std::endl;
+        return false; } 
+   yarp::os::Network::connect( std::string("/" + get_module_prefix() + "/sending_q"), "/locoman_service_2/receiving_q");       
     
-    std::cout<<" - Initialized"<<std::endl;
+   if(!sending_fc.open(std::string("/" + get_module_prefix() + "/sending_fc"))) {
+        std::cout << "ERROR: cannot open YARP port " << std::string(get_module_prefix() + "/sending_fc") << std::endl;
+        return false; } 
+   yarp::os::Network::connect( std::string("/" + get_module_prefix() + "/sending_fc"), "/locoman_service_2/receiving_fc");       
+   // end of the ...  YARP Port Section -SEND
+   //----------------------------------------------------------------------------------------------------------------
+   
+  if(!receiving_Big_Rf.open(std::string("/" + get_module_prefix() + "/receiving_Big_Rf"))) {
+  std::cout << "ERROR: cannot open YARP port " << std::string(get_module_prefix() + "/receiving_Big_Rf") << std::endl;
+  return false;  }
+  if(!yarp::os::Network::connect(  "/locoman_service_2/sending_Big_Rf", std::string("/" + get_module_prefix() + "/receiving_Big_Rf"))){
+  std::cout << "ERROR connecting YARP ports " << std::endl ;
+  return false ;
+  }   
+  receiving_Big_Rf_initted = false ;
+   //----------------------------------------------------------
 
-	//------------------------------------------------------------------------------------------
-	char vai_01 ;
-	std::cout << " Put the Robot UP on the terrain and press a key !!! " << std::endl ;
-	//std::cout << " waiting for a keyboard input !!! " << std::endl ;
-	std::cin >> vai_01 ;
-	//-------------------
-
-    // Computation PINV for FT sensor processing
-	waist_index   = model.iDyn3_model.getLinkIndex("Waist");
+  // Computation PINV for FT sensor processing
+    waist_index   = model.iDyn3_model.getLinkIndex("Waist");
     l_ankle_index = model.iDyn3_model.getLinkIndex("l_leg_ft") ;
     //     int l_ankle_index = model.iDyn3_model.getLinkIndex("l_foot_upper_left_link") ;
     l_c1_index    = model.iDyn3_model.getLinkIndex("l_foot_upper_left_link") ;
@@ -215,15 +232,22 @@ bool multicontact_thread::custom_init()
 																						   model
 																   ), 1E-10 ) ; 
     // sensor force biasing
-//-----------------------------------------------------------
-	// Evaluating offset for contact forces
-	int dim_fc_offset = 1000 ;  
- 
+    //-----------------------------------------------------------
+    // Evaluating offset for contact forces
+	//------------------------------------------------------------------------------------------
+	char vai_01 ;
+	std::cout << " Press 'y' if you need to compute the sensors offset !!! Otherwise press any key !!!  " << std::endl ;
+	//std::cout << " waiting for a keyboard input !!! " << std::endl ;
+	std::cin >> vai_01 ;
+	//-------------------
 	fc_offset_left.zero()  ;
 	fc_offset_right.zero() ;
 	fc_offset_left_hand.zero() ;
 	fc_offset_right_hand.zero() ;
- 
+	
+	if (vai_01 == 'y' ) {
+       int dim_fc_offset = 1000 ;  
+
 	for(int k=0; k<dim_fc_offset ; k++ ){
 		robot.senseftSensor("l_leg_ft", ft_l_ankle) ;
 		robot.senseftSensor("r_leg_ft", ft_r_ankle) ;
@@ -240,7 +264,7 @@ bool multicontact_thread::custom_init()
 	fc_offset_right      = fc_offset_right/ dim_fc_offset ;
 	fc_offset_left_hand  = fc_offset_left_hand/ dim_fc_offset ;
 	fc_offset_right_hand = fc_offset_right_hand/ dim_fc_offset ;
-  
+  }
 	// first measures setup and cout
     
 	fc_sense_left  = map_l_fcToSens_PINV * ft_l_ankle ;
@@ -276,11 +300,39 @@ bool multicontact_thread::custom_init()
 //  //-------------------
 	read_offset_q();
 
-// TODO
-	// filling sensors window
+    // filling sensors window
 	
+	//Getting Force/Torque Sensor Measures
+	if(!robot.senseftSensor("l_leg_ft", ft_l_ankle)) std::cout << "ERROR READING SENSOR l_ankle" << std::endl;
+	if(!robot.senseftSensor("r_leg_ft", ft_r_ankle)) std::cout << "ERROR READING SENSOR r_ankle" << std::endl;
+	if(!robot.senseftSensor("l_arm_ft", ft_l_wrist)) std::cout << "ERROR READING SENSOR l_wrist" << std::endl;
+	if(!robot.senseftSensor("r_arm_ft", ft_r_wrist)) std::cout << "ERROR READING SENSOR r_wrist" << std::endl;
+
+	// Filtering The Sensors
+	Sensor_Collection.setSubvector(0, ft_l_ankle )   ;
+	Sensor_Collection.setSubvector(6, ft_r_ankle )   ;
+	Sensor_Collection.setSubvector(12, ft_l_wrist )  ;
+	Sensor_Collection.setSubvector(18, ft_r_wrist )  ;
+
+	// HACK to prevent disturbances from FT_sensors
+	Sensor_Collection[0]=0.0 ;
+	Sensor_Collection[1]=0.0 ;
+	Sensor_Collection[6]=0.0 ;
+	Sensor_Collection[7]=0.0 ;
 	
+	// Initializing Sensor related variables 
+	for(int t=0; t<WINDOW_size ; t++ )
+	{
+	  SENSORS_WINDOW.setCol(t, Sensor_Collection )   ;
+	}
+	SENSORS_SUM = WINDOW_size * Sensor_Collection ;
+	SENSORS_FILTERED = Sensor_Collection ;
+	count_sensor = 0 ;
+
 	setup_wb_ik();
+	
+	std::cout<<" - Initialized"<<std::endl;
+
 	return true;
 }
 
@@ -296,31 +348,58 @@ void multicontact_thread::read_offset_q(){
 	}
 	q_current = q_current/dim_offeset ;
 
-	// yarp::sig::Vector q_motor_init = q_des  ;
-	q_offset = q_des - q_current ;
-	// end of the Homing Section
-
-	q_sense =  locoman::utils::senseMotorPosition(robot, flag_robot) ;
-	q_current = q_sense + q_offset ;
-	std::cout << " final error offset =  " <<  norm(q_current - q_des) << std::endl;
+	q_offset = input - q_current ;
 
 }
 
 void multicontact_thread::send_to_service2() {
-	// TODO
+  //---------------------------------------------------------------------------------------------------------
+  // Yarp Ports: Sending Robot Configuration and Contact Forces 
+     
+  yarp::sig::Vector &sending_q_vect = sending_q.prepare() ; 
+  sending_q_vect.resize( input.size() ) ;
+  sending_q_vect = input ;
+  sending_q.write() ;
+  std::cout << " q_to_service_2 = " << input.toString() << std::endl ;
+
+  yarp::sig::Vector &sending_fc_vect = sending_fc.prepare() ;
+  sending_fc_vect.resize( FC_to_world.size() ) ;
+  sending_fc_vect = FC_to_world ;
+  sending_fc.write() ;
+  std::cout << "FC_to_service_2 = " << FC_to_world.toString() << std::endl  ;
+   
 }
 
 void multicontact_thread::read_from_service2() {
-	// TODO
+  if(!receiving_Big_Rf_initted){ Big_Rf_received = receiving_Big_Rf.read();  // if we are in the first loop... waiting for data 
+      if(Big_Rf_received){ Big_Rf_data = *Big_Rf_received;
+	receiving_Big_Rf_initted = true ; }
+  }
+  else {  Big_Rf_received = receiving_Big_Rf.read(false) ; // do not wait for data
+      if(Big_Rf_received){Big_Rf_data = *Big_Rf_received; }
+  };  
+  
+  Big_Rf_new = Big_Rf_data ;
+  
+    std::cout << "Big_Rf_new.rows() = " << Big_Rf_new.rows() << std::endl ;
+    std::cout << "Big_Rf_new.cols() = " << Big_Rf_new.cols() << std::endl ;
+   //std::cout << "Big_Rf_new.toString() = " << Big_Rf_new.toString() << std::endl ;    
+    
 }
 
 void multicontact_thread::run()
 {
-	
+    utils_1.tic() ;
     sense();
+    std::cout<<"after sense" << std::endl ;
 
     send_to_service2();
+    std::cout<<"after sending ports" << std::endl ;
+    
+    read_from_service2();
+    std::cout<<"after reading ports" << std::endl ;
 
+    
     // get the command
     if(recv_interface.getCommand(msg,recv_num))
     {
@@ -342,16 +421,21 @@ void multicontact_thread::run()
             time=0;
         }
     }
+    std::cout<<"after command part" << std::endl ;
 
     control_law();
+    std::cout<<"after control law part" << std::endl ;
 
+    std::cout<<run_counter<< std::endl ; 
+    run_counter++ ;
     move();
+    utils_1.toc() ;
 }
 
 void multicontact_thread::sense()
 {
     // joint positions
-    input = output; // robot.sensePosition(); // FIXME
+    //input = output; // robot.sensePosition(); // FIXME
     model.updateiDyn3Model( input, true );
     // ft sensors
     //Getting Force/Torque Sensor Measures
@@ -360,25 +444,25 @@ void multicontact_thread::sense()
     if(!robot.senseftSensor("l_arm_ft", ft_l_wrist)) std::cout << "ERROR READING SENSOR l_wrist" << std::endl;
     if(!robot.senseftSensor("r_arm_ft", ft_r_wrist)) std::cout << "ERROR READING SENSOR r_wrist" << std::endl;
 
-	// Filtering The Sensors
-	Sensor_Collection.setSubvector(0, ft_l_ankle )   ;
-	Sensor_Collection.setSubvector(6, ft_r_ankle )   ;
-	Sensor_Collection.setSubvector(12, ft_l_wrist )  ;
-	Sensor_Collection.setSubvector(18, ft_r_wrist )  ;
+    // Filtering The Sensors
+    Sensor_Collection.setSubvector(0, ft_l_ankle )   ;
+    Sensor_Collection.setSubvector(6, ft_r_ankle )   ;
+    Sensor_Collection.setSubvector(12, ft_l_wrist )  ;
+    Sensor_Collection.setSubvector(18, ft_r_wrist )  ;
 
-	// HACK to prevent disturbances from FT_sensors
-	Sensor_Collection[0]=0.0 ;
-	Sensor_Collection[1]=0.0 ;
-	Sensor_Collection[6]=0.0 ;
-	Sensor_Collection[7]=0.0 ;
+    // HACK to prevent disturbances from FT_sensors
+    Sensor_Collection[0]=0.0 ;
+    Sensor_Collection[1]=0.0 ;
+    Sensor_Collection[6]=0.0 ;
+    Sensor_Collection[7]=0.0 ;
 
-// 	std::cout << "Sensor_Collection = "  << Sensor_Collection.toString() << std::endl;
-
-	count_sensor = count_sensor% WINDOW_size ;
-	SENSORS_WINDOW.setCol( count_sensor , Sensor_Collection ) ;
-	SENSORS_SUM = SENSORS_SUM + Sensor_Collection -1.0 * SENSORS_WINDOW.getCol((count_sensor+ 1)%WINDOW_size);
-	SENSORS_FILTERED = SENSORS_SUM / (WINDOW_size-1.0) ;
-	count_sensor += 1 ;
+    count_sensor = count_sensor% WINDOW_size ;
+    SENSORS_WINDOW.setCol( count_sensor , Sensor_Collection ) ;
+    SENSORS_SUM = SENSORS_SUM + Sensor_Collection -1.0 * SENSORS_WINDOW.getCol((count_sensor+ 1)%WINDOW_size);
+    SENSORS_FILTERED = SENSORS_SUM / (WINDOW_size-1.0) ;
+    count_sensor += 1 ;
+    
+    contact_force_vector_computation() ;
 }
 
 void multicontact_thread::contact_force_vector_computation() {
@@ -425,6 +509,7 @@ void multicontact_thread::contact_force_vector_computation() {
 
 void multicontact_thread::control_law()
 {
+  
   if(true) {
     control_law_ik();
   } else {
@@ -441,6 +526,7 @@ void multicontact_thread::control_law()
 void multicontact_thread::move()
 {
     robot.move(output);
+    input = output; // remove this line if you are using  robot.sensePosition()
 }
 
 
@@ -487,6 +573,8 @@ void multicontact_thread::control_law_ik()
 
     if(going_to_initial_position)
     {
+                  std::cout<<" - going_to_initial_position -"<<std::endl;
+
         double alpha = (time>5.0)?1:time/5.0;
         output = (1-alpha)*q_init + (alpha)*home;
         if(time>5.0)

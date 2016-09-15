@@ -35,6 +35,7 @@
 #include <wholebody_ik/wholebody_ik.h>
 #include <drc_shared/yarp_msgs/multicontact_msg.h>
 #include <trajectory_generator/trajectory_generator.h>
+#include <utils/utils.h>
 
 
 /**
@@ -46,10 +47,27 @@ namespace walkman
     class multicontact_thread : public control_thread
     {
     private:
-      
-	walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
 
-	wholebody_ik IK;
+    //------------------------------------------      
+    // Yarp Ports ------------
+    // Sending Ports
+    yarp::os::BufferedPort<yarp::sig::Vector> sending_q    ;
+    yarp::os::BufferedPort<yarp::sig::Vector> sending_fc   ;
+
+    yarp::os::BufferedPort<yarp::sig::Matrix> receiving_Big_Rf;
+    yarp::sig::Matrix *Big_Rf_received ;
+    bool receiving_Big_Rf_initted ;
+    yarp::sig::Matrix Big_Rf_data;  
+    int run_counter ;
+    
+    // End of the Yarp Ports -------------------
+    //------------------------------------------
+      
+    utils utils_1;
+    
+      walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
+
+      wholebody_ik IK;
 
 	//
 	unsigned int size_q;
@@ -113,7 +131,9 @@ namespace walkman
     yarp::sig::Vector fc_sense_right;
     yarp::sig::Vector fc_sense_left_hand;
     yarp::sig::Vector fc_sense_right_hand;
-    
+
+    yarp::sig::Matrix Big_Rf_new ; 
+
 	bool flag_robot = 1 ;
 	bool flag_simulator = 1-flag_robot ;
 	
