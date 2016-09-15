@@ -33,22 +33,16 @@ private:
   std::chrono::steady_clock::time_point start, end;
   std::chrono::duration<double> elapsed_time;
   
-  ros::Publisher vis_pub;
-  visualization_msgs::Marker marker;
-
 public:
   
   utils();
   
   ~utils();
   
-  void inline tic();
+  void  tic();
   
-  void inline toc();
+  void  toc();
   
-  void publish_trajectory(std::map<double,KDL::Frame> points,std::string chain,double dt_viz,int steps=1000);
-  
-  void publish_marker();
 };
 
 #endif
