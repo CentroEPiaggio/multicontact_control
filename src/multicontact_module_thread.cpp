@@ -46,7 +46,7 @@ multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::R
 	SENSORS_WINDOW(24,WINDOW_size),
 	SENSORS_SUM(24, 0.0), 
 	SENSORS_FILTERED(24, 0.0),
-//
+	SENSORS_AT_COMMAND(24,0.0),
 	ft_l_ankle(6,0.0),
 	ft_r_ankle(6,0.0),
 	ft_l_wrist(6,0.0),
@@ -85,6 +85,10 @@ multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::R
 	fc_sense_right_hand(12,0.0),
         Big_Rf_new(48, 37) 
 {
+state_map.emplace("wholebody_ik",false)  ;
+state_map.emplace("touch",false)  ;
+state_map.emplace("force",false)  ;
+  
     input.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     output.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     home.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
@@ -381,9 +385,9 @@ void multicontact_thread::read_from_service2() {
   
   Big_Rf_new = Big_Rf_data ;
   
-    std::cout << "Big_Rf_new.rows() = " << Big_Rf_new.rows() << std::endl ;
-    std::cout << "Big_Rf_new.cols() = " << Big_Rf_new.cols() << std::endl ;
-   //std::cout << "Big_Rf_new.toString() = " << Big_Rf_new.toString() << std::endl ;    
+//     std::cout << "Big_Rf_new.rows() = " << Big_Rf_new.rows() << std::endl ;
+//     std::cout << "Big_Rf_new.cols() = " << Big_Rf_new.cols() << std::endl ;
+//     std::cout << "Big_Rf_new.toString() = " << Big_Rf_new.toString() << std::endl ;    
     
 }
 
@@ -398,27 +402,44 @@ void multicontact_thread::run()
     
     read_from_service2();
     std::cout<<"after reading ports" << std::endl ;
-
     
     // get the command
     if(recv_interface.getCommand(msg,recv_num))
-    {
-        std::cout<<"Command received: "<<msg.command<<std::endl;
+    {    
+      SENSORS_AT_COMMAND = SENSORS_FILTERED;
+      std::cout<<"Command received: "<<msg.command<<std::endl;
 
         if(msg.command=="reset")
         {
             go_in_initial_position();
             time=0;
         }
-        else
+        //----------------------------------------------------------
+	// WB IK Commands!
+	else if (generate_poses_from_cmd() ){ 
+	      set_state("wholebody_ik");
+	      time=0;
+	}
+        //----------------------------------------------------------
+	// Hybrid Force/Position Commands!
+        else if (msg.command=="touch") {
+	      set_state("touch");
+	}
+	//----------------------------------------------------------
+	// Control Force Commands!
+	else if (msg.command=="force_no_left"){
+	      std::cout<<"force_no_left :  WE ARE IN !!!!"<<std::endl;
+	      set_state("force");
+	}
+	else if (msg.command=="force_no_right"){
+            std::cout<<"force_no_right :  WE ARE IN !!!!"<<std::endl;
+	      set_state("force");
+	}
+	//------------------------------------------------------
+        else // TODO : verify this!
         {
-			if(!generate_poses_from_cmd())
-			{
-				std::cout<<"Received malformed command, abort"<<std::endl;
-				return;
-			}
-
-            time=0;
+	  std::cout<<"Received unknown command!!!"<<std::endl;
+            
         }
     }
     std::cout<<"after command part" << std::endl ;
@@ -430,6 +451,28 @@ void multicontact_thread::run()
     run_counter++ ;
     move();
     utils_1.toc() ;
+}
+
+void multicontact_thread::set_state(std::string key) {
+  std::map<std::string,bool>::iterator it;
+  for(it=state_map.begin(); it!=state_map.end(); ++it) {
+    if(it->first==key) {
+      it->second=true;
+    }
+    else it->second = false;
+  }
+}
+
+bool multicontact_thread::is_state_active(std::string key) {
+  std::map<std::string,bool>::iterator it;
+  for(it=state_map.begin(); it!=state_map.end(); ++it) {
+    if(it->first.find(key) != std::string::npos) {
+      if(it->second == true) {
+	return true;
+      }
+    }
+  }
+  return false;
 }
 
 void multicontact_thread::sense()
@@ -508,13 +551,103 @@ void multicontact_thread::contact_force_vector_computation() {
 }
 
 void multicontact_thread::control_law()
-{
-  
-  if(true) {
+{  
+  if(state_map["wholebody_ik"]) {
     control_law_ik();
+  } else if(state_map["touch"]) {
+    sense();
+
+    if(msg.touch.at("l_sole")) {
+      
+      current_chain = "wb_right";
+      IK.set_desired_wb_poses_as_current(current_chain);
+	
+      if(!(SENSORS_FILTERED[2] - SENSORS_AT_COMMAND[2] <= -DELTA_F_MAX)) {
+	IK.get_desired_wb_poses(current_chain,touch_poses);
+	touch_poses["l_sole"].p += KDL::Vector(0.0,0.0,-0.005);
+	IK.set_desired_wb_poses(current_chain,touch_poses);
+	if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
+	  output = input;
+      } else {
+	output = input;
+	state_map["touch"] = false;
+      }
+    } else if(msg.touch.at("r_sole")) {
+      
+      current_chain = "wb_left";
+      IK.set_desired_wb_poses_as_current(current_chain);
+      
+      if(!(SENSORS_FILTERED[8] - SENSORS_AT_COMMAND[8] <= -DELTA_F_MAX)) {
+	IK.get_desired_wb_poses(current_chain,touch_poses);
+	touch_poses["r_sole"].p += KDL::Vector(0.0,0.0,-0.005);
+	IK.set_desired_wb_poses(current_chain,touch_poses);
+	if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
+	  output = input;
+      } else {
+	output = input;
+	state_map["touch"] = false;
+      }
+    } else {
+      current_chain = "wb_left";
+      IK.set_desired_wb_poses_as_current(current_chain);
+      if(msg.touch.at("LSoftHand") && msg.touch.at("RSoftHand")) {
+	bool still_moving = false;
+         IK.get_desired_wb_poses(current_chain,touch_poses);
+
+	  if(!(SENSORS_FILTERED[13] - SENSORS_AT_COMMAND[13] <= -DELTA_F_MAX)) { // if not touching yet with left hand
+	    still_moving = true;
+	    // set target left hand
+	    // other frame target as current
+	    touch_poses["LSoftHand"].p += KDL::Vector(0.0,0.0,-0.005);
+	  //  IK.set_desired_wb_poses(current_chain,touch_poses);
+// 	    if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
+// 	      output = input;
+	  } 
+	  if(!(SENSORS_FILTERED[19] - SENSORS_AT_COMMAND[19] >= DELTA_F_MAX)) { // if not touching yet with right hand
+	    still_moving = true;
+	    // set target right hand
+	    // other frame target as current	
+	    	    touch_poses["RSoftHand"].p += KDL::Vector(0.0,0.0,-0.005);
+	  } 
+	  IK.set_desired_wb_poses(current_chain,touch_poses);
+	  if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
+	    output = input;
+	  if(!still_moving) {
+	    state_map["touch"] = false;
+	  }
+      } else {
+	if(msg.touch.at("LSoftHand")) {	  
+	  if(!(SENSORS_FILTERED[13] - SENSORS_AT_COMMAND[13] <= -DELTA_F_MAX)) {
+	    IK.get_desired_wb_poses(current_chain,touch_poses);
+	    touch_poses["LSoftHand"].p += KDL::Vector(0.0,0.0,-0.005);
+	    IK.set_desired_wb_poses(current_chain,touch_poses);
+	    if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
+	      output = input;
+	  } else {
+	    output = input;
+	    state_map["touch"] = false;
+	  }
+	}
+	if(msg.touch.at("RSoftHand")) {
+	  if(!(SENSORS_FILTERED[19] - SENSORS_AT_COMMAND[19] >= DELTA_F_MAX)) {
+	    IK.get_desired_wb_poses(current_chain,touch_poses);
+	    touch_poses["RSoftHand"].p += KDL::Vector(0.0,0.0,-0.005);
+	    IK.set_desired_wb_poses(current_chain,touch_poses);
+	    if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
+	      output = input;
+	  } else {
+	    output = input;
+	    state_map["touch"] = false;
+	  }
+	}
+      }
+    }
+  } else if(state_map["force"]) {
+    
   } else {
-    output = q_init;
+    output = input;
   }
+  
 //   if(wb_cmd.going_to_initial_position) {
 //     wb_cmd.compute_q(time,output);
 //   } else {
@@ -573,7 +706,7 @@ void multicontact_thread::control_law_ik()
 
     if(going_to_initial_position)
     {
-                  std::cout<<" - going_to_initial_position -"<<std::endl;
+        std::cout<<" - going_to_initial_position -"<<std::endl;
 
         double alpha = (time>5.0)?1:time/5.0;
         output = (1-alpha)*q_init + (alpha)*home;

@@ -79,12 +79,14 @@ namespace walkman
     
     yarp::sig::Vector q_des;
     
-        		int WINDOW_size;
+    int WINDOW_size;
 
 		
 	yarp::sig::Matrix SENSORS_WINDOW ;
 	yarp::sig::Vector SENSORS_SUM ;
 	yarp::sig::Vector SENSORS_FILTERED ;
+	yarp::sig::Vector SENSORS_AT_COMMAND ;
+	
 	
 	yarp::sig::Vector ft_l_ankle;
 	yarp::sig::Vector ft_r_ankle;
@@ -212,6 +214,14 @@ namespace walkman
 	bool done = false;
 
 	void reset_traj_types();
+	
+	std::map<std::string,bool> state_map;
+	void set_state(std::string key);
+
+	bool is_state_active(std::string key);
+	
+	const double DELTA_F_MAX = 10.0; // threshold on force
+	std::map<std::string,KDL::Frame> touch_poses;
 	//
     public:
         /**
