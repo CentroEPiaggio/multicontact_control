@@ -142,7 +142,9 @@ state_map.emplace("force",false)  ;
 
 bool multicontact_thread::custom_init()
 {
-  run_counter = 0 ;
+//     log_input.start("q_input.txt");
+//     log_output.start("q_output.txt");
+    run_counter = 0 ;
     //  real time thread
     struct sched_param thread_param;
     thread_param.sched_priority = 99;

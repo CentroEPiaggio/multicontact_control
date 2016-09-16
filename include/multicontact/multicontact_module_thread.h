@@ -23,7 +23,6 @@
 
 #include <GYM/control_thread.hpp>
 #include <GYM/yarp_command_interface.hpp>
-#include <drc_shared/yarp_msgs/multicontact_msg.h>
 
 #include <multicontact/multicontact.h>
 #include <trajectory_generator/trajectory_generator.h>
@@ -37,6 +36,7 @@
 #include <trajectory_generator/trajectory_generator.h>
 #include <utils/utils.h>
 
+#include <drc_shared/data_logger.hpp>
 
 /**
  * @brief multicontact control thread
@@ -234,6 +234,8 @@ namespace walkman
 	double mg_hands = hands_part*mg ;
 	double regu_filter = 1E9 ; 
 	//
+	walkman::log_utils::data_logger log_input;
+// 	walkman::log_utils::data_logger log_output;
     public:
         /**
         * @brief constructor
