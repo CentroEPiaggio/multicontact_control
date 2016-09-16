@@ -41,6 +41,7 @@ multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::R
 	q_current(size_q, 0.0),
 	q_offset(size_q, 0.0),   // q_current = q_sense + q_offset
 	q_des(size_q, 0.0),
+	d_q_move(size_q, 0.0),
 // for FT_sensors filtering
 	WINDOW_size(5),
 	SENSORS_WINDOW(24,WINDOW_size),
@@ -83,6 +84,13 @@ multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::R
 	fc_sense_right(12,0.0),
 	fc_sense_left_hand(12,0.0),
 	fc_sense_right_hand(12,0.0),
+	
+	FC_DES_NO_RIGHT_FOOT(48,0.0),
+	FC_DES_NO_LEFT_FOOT(48,0.0),
+        FC_DES_feet(24, 0.0)  ,
+        FC_DES_hands(24,0.0) ,
+        d_fc_total_des(48,0.0) ,
+	
         Big_Rf_new(48, 37) 
 {
 state_map.emplace("wholebody_ik",false)  ;
@@ -554,10 +562,11 @@ void multicontact_thread::control_law()
 {  
   if(state_map["wholebody_ik"]) {
     control_law_ik();
-  } else if(state_map["touch"]) {
+  } 
+  else if(state_map["touch"]) {   // BEGINNING the TOUCH part...
     sense();
 
-    if(msg.touch.at("l_sole")) {
+    if(msg.touch.at("l_sole")) {  // going in touch with the left foot
       
       current_chain = "wb_right";
       IK.set_desired_wb_poses_as_current(current_chain);
@@ -572,7 +581,7 @@ void multicontact_thread::control_law()
 	output = input;
 	state_map["touch"] = false;
       }
-    } else if(msg.touch.at("r_sole")) {
+    } else if(msg.touch.at("r_sole")) {   // going in touch with the right foot
       
       current_chain = "wb_left";
       IK.set_desired_wb_poses_as_current(current_chain);
@@ -590,7 +599,7 @@ void multicontact_thread::control_law()
     } else {
       current_chain = "wb_left";
       IK.set_desired_wb_poses_as_current(current_chain);
-      if(msg.touch.at("LSoftHand") && msg.touch.at("RSoftHand")) {
+      if(msg.touch.at("LSoftHand") && msg.touch.at("RSoftHand")) {  // going in touch with both the hands
 	bool still_moving = false;
          IK.get_desired_wb_poses(current_chain,touch_poses);
 
@@ -615,45 +624,100 @@ void multicontact_thread::control_law()
 	  if(!still_moving) {
 	    state_map["touch"] = false;
 	  }
-      } else {
-	if(msg.touch.at("LSoftHand")) {	  
+      } 
+      else {
+	if(msg.touch.at("LSoftHand")) {	   // going in touch ONLY with the Left hand
 	  if(!(SENSORS_FILTERED[13] - SENSORS_AT_COMMAND[13] <= -DELTA_F_MAX)) {
 	    IK.get_desired_wb_poses(current_chain,touch_poses);
 	    touch_poses["LSoftHand"].p += KDL::Vector(0.0,0.0,-0.005);
 	    IK.set_desired_wb_poses(current_chain,touch_poses);
 	    if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
 	      output = input;
-	  } else {
+	  } 
+	  else {
 	    output = input;
 	    state_map["touch"] = false;
 	  }
 	}
-	if(msg.touch.at("RSoftHand")) {
-	  if(!(SENSORS_FILTERED[19] - SENSORS_AT_COMMAND[19] >= DELTA_F_MAX)) {
+	if(msg.touch.at("RSoftHand")) {  // going in touch ONLY with the Right hand
+	  if(!(SENSORS_FILTERED[19] - SENSORS_AT_COMMAND[19] >= DELTA_F_MAX)) { 
 	    IK.get_desired_wb_poses(current_chain,touch_poses);
 	    touch_poses["RSoftHand"].p += KDL::Vector(0.0,0.0,-0.005);
 	    IK.set_desired_wb_poses(current_chain,touch_poses);
 	    if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
 	      output = input;
-	  } else {
+	  } 
+	  else {
 	    output = input;
 	    state_map["touch"] = false;
 	  }
 	}
       }
+    } 
+  }// END of the TOUCH part 
+  else if(state_map["force"]) {   // BEGINNING the FORCE part...
+    if(msg.command=="force_no_right"){    
+	if( SENSORS_FILTERED[8]< 30.0 )  // if the right foot sense more than 3 kg do... (task not realized!) 
+	{
+	mg = 1200 ;
+	feet_part  = 2.0/3.0 ;
+	hands_part = 1.0-feet_part ;
+	mg_foot  = feet_part*mg ;
+	mg_hands = hands_part*mg ;
+	
+	locoman::utils::FC_DES_left(   FC_DES_feet , mg_foot  ) ;
+	locoman::utils::FC_DES_center_hands( FC_DES_hands, mg_hands ) ;
+	FC_DES_NO_RIGHT_FOOT.setSubvector(0 , FC_DES_feet) ;
+	FC_DES_NO_RIGHT_FOOT.setSubvector(FC_DES_feet.length(), FC_DES_hands) ;
+	
+	d_fc_total_des = FC_DES_NO_RIGHT_FOOT -1.0*FC_to_world;
+	
+	regu_filter = 1E9 ; 
+	
+	Big_Rf_new = locoman::utils::filter_k_eps_SVD( Big_Rf_new , 24, 1E-15) ;
+
+	d_q_move = -1.0*locoman::utils::Pinv_Regularized( Big_Rf_new , regu_filter, 1E-10 )* d_fc_total_des ;
+	
+	output = input + d_q_move ; 
+	}
+	else{  // if the right foot sense less than 3 kg do nothing (task realized!)
+	  output = input ;
+	  state_map["force"] = false;
+	} 
     }
-  } else if(state_map["force"]) {
-    
-  } else {
+    else if (msg.command=="force_no_left"){ 
+      	if( SENSORS_FILTERED[2]< 30.0 )  // if the right foot sense more than 3 kg do... (task not realized!) 
+	{
+	mg = 1200 ;
+	feet_part  = 2.0/3.0 ;
+	hands_part = 1.0-feet_part ;
+	mg_foot  = feet_part*mg ;
+	mg_hands = hands_part*mg ;
+	
+	locoman::utils::FC_DES_right(   FC_DES_feet , mg_foot  ) ;
+	locoman::utils::FC_DES_center_hands( FC_DES_hands, mg_hands ) ;
+	FC_DES_NO_LEFT_FOOT.setSubvector(0 , FC_DES_feet) ;
+	FC_DES_NO_LEFT_FOOT.setSubvector(FC_DES_feet.length(), FC_DES_hands) ;
+	
+	d_fc_total_des = FC_DES_NO_LEFT_FOOT -1.0*FC_to_world;
+	
+	regu_filter = 1E9 ; 
+	
+	Big_Rf_new = locoman::utils::filter_k_eps_SVD( Big_Rf_new , 24, 1E-15) ;
+
+	d_q_move = -1.0*locoman::utils::Pinv_Regularized( Big_Rf_new , regu_filter, 1E-10 )* d_fc_total_des ;
+	
+	output = input + d_q_move ; 
+	}
+	else {
+	output = input;
+	state_map["force"] = false;
+	}     
+    } 
+    else {
     output = input;
-  }
-  
-//   if(wb_cmd.going_to_initial_position) {
-//     wb_cmd.compute_q(time,output);
-//   } else {
-//     wb_cmd.get_q(output);
-//   }
-    
+    } 
+  }// END of the TOUCH part  
 }
 
 void multicontact_thread::move()

@@ -64,13 +64,9 @@ namespace walkman
     //------------------------------------------
       
     utils utils_1;
-    
-      walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
-
-      wholebody_ik IK;
-
-	//
-	unsigned int size_q;
+    walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
+    wholebody_ik IK;
+    unsigned int size_q;
    
      
     yarp::sig::Vector q_sense;
@@ -78,6 +74,8 @@ namespace walkman
     yarp::sig::Vector q_offset;   // q_current = q_sense + q_offset
     
     yarp::sig::Vector q_des;
+    
+    yarp::sig::Vector d_q_move ;
     
     int WINDOW_size;
 
@@ -134,6 +132,12 @@ namespace walkman
     yarp::sig::Vector fc_sense_left_hand;
     yarp::sig::Vector fc_sense_right_hand;
 
+    yarp::sig::Vector FC_DES_NO_RIGHT_FOOT;
+    yarp::sig::Vector FC_DES_NO_LEFT_FOOT;
+    yarp::sig::Vector FC_DES_feet  ;
+    yarp::sig::Vector FC_DES_hands ;
+    yarp::sig::Vector d_fc_total_des ;
+    
     yarp::sig::Matrix Big_Rf_new ; 
 
 	bool flag_robot = 1 ;
@@ -222,6 +226,13 @@ namespace walkman
 	
 	const double DELTA_F_MAX = 10.0; // threshold on force
 	std::map<std::string,KDL::Frame> touch_poses;
+        
+	double mg = 1200 ;
+	double feet_part  = 2.0/3.0 ;
+	double hands_part = 1.0-feet_part ;
+	double mg_foot  = feet_part*mg ;
+	double mg_hands = hands_part*mg ;
+	double regu_filter = 1E9 ; 
 	//
     public:
         /**
