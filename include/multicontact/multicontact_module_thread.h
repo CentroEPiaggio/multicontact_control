@@ -36,6 +36,7 @@
 #include <trajectory_generator/trajectory_generator.h>
 #include <utils/utils.h>
 
+#include <drc_shared/data_logger.hpp>
 
 /**
  * @brief multicontact control thread
@@ -222,6 +223,8 @@ namespace walkman
 	const double DELTA_F_MAX = 10.0; // threshold on force
 	std::map<std::string,KDL::Frame> touch_poses;
 	//
+	walkman::log_utils::data_logger log_input;
+// 	walkman::log_utils::data_logger log_output;
     public:
         /**
         * @brief constructor
