@@ -23,7 +23,6 @@
 
 #include <GYM/control_thread.hpp>
 #include <GYM/yarp_command_interface.hpp>
-#include <drc_shared/yarp_msgs/multicontact_msg.h>
 
 #include <multicontact/multicontact.h>
 #include <trajectory_generator/trajectory_generator.h>
