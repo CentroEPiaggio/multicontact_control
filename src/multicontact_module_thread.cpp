@@ -135,28 +135,36 @@ state_map.emplace("force",false)  ;
     q_head[0] = 0.0;
     q_head[1] = 0.0;
 
-    q_right_arm[0]=  0.6;
-    q_right_arm[1]= -0.2;
-    q_right_arm[3]= -1.2;
-    q_right_arm[5]= -0.6;
-
-    q_left_arm[0]=  0.6;
-    q_left_arm[1]=  0.2;
-    q_left_arm[3]= -1.2;
-    q_left_arm[5]= -0.6;
+    // 59.894769 -9.56636 20.572535 -109.180362 -61.110078 -28.820571 -1.040955
+    q_right_arm[0]= 60*DEG2RAD;
+    q_right_arm[1]= -10*DEG2RAD;
+    q_right_arm[2]= 20*DEG2RAD;
+    q_right_arm[3]= -110*DEG2RAD;
+    q_right_arm[4]= -60*DEG2RAD;
+    q_right_arm[5]= -30*DEG2RAD;
+    // 59.822628 9.731391 -20.199733 -109.027161 60.439224 -29.08287 1.049194
+    q_left_arm[0]= 60*DEG2RAD;
+    q_left_arm[1]= 10*DEG2RAD;
+    q_left_arm[2]= -20*DEG2RAD;
+    q_left_arm[3]= -110*DEG2RAD;
+    q_left_arm[4]= 60*DEG2RAD;
+    q_left_arm[5]= -30*DEG2RAD;
 
     q_torso[0] = 0.0;
     q_torso[1] = 0.0;
     q_torso[2] = 0.0;
-
-    q_right_leg[2]= -0.3;
-    q_right_leg[3]=  0.6;
-    q_right_leg[4]= -0.3;
-
-    q_left_leg[2]= -0.3;
-    q_left_leg[3]=  0.6;
-    q_left_leg[4]= -0.3;
-
+    // 1.888115 0.748648 -15.351364 23.773366 -10.643065 -2.006551
+    q_right_leg[0]= 2*DEG2RAD;
+    q_right_leg[2]= -15*DEG2RAD;
+    q_right_leg[3]=  25*DEG2RAD;
+    q_right_leg[4]= -10*DEG2RAD;
+    q_right_leg[5]= -2*DEG2RAD;
+    // -3.044729 0.428668 -14.159493 23.95687 -10.984182 2.724435
+    q_left_leg[0]= -2*DEG2RAD;
+    q_left_leg[2]= -15*DEG2RAD;
+    q_left_leg[3]= 25*DEG2RAD;
+    q_left_leg[4]= -10*DEG2RAD;
+    q_left_leg[5]= 2*DEG2RAD;
     robot.fromRobotToIdyn(q_right_arm,q_left_arm,q_torso,q_right_leg,q_left_leg,q_head,home);
 
     // populate command list
