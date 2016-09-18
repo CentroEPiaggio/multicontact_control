@@ -241,6 +241,8 @@ namespace walkman
 
 	tf::TransformBroadcaster br;
 	void broadcast_com_tf();
+
+    yarp::sig::Vector delta;
     public:
         /**
         * @brief constructor

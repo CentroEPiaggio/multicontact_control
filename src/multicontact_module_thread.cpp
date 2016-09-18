@@ -26,6 +26,7 @@
 #include <yarp/math/Math.h>
 #include <yarp/math/SVD.h>
 
+#define DEG2RAD M_PI/180.0 //to be multiplied
 
 using namespace yarp::math;
 using namespace yarp::os;
@@ -122,6 +123,7 @@ state_map.emplace("force",false)  ;
     output.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     home.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     q_init.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
+    delta.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
 
     yarp::sig::Vector q_right_arm(7,0.0);
     yarp::sig::Vector q_left_arm(7,0.0);
@@ -784,8 +786,37 @@ void multicontact_thread::control_law()
   }// END of the TOUCH part  
 }
 
+double abs_max(yarp::sig::Vector v)
+{
+    double max = -9999.0;
+    for(int i=0;i<v.size();i++)
+    {
+        if(fabs(v[i]) > max)
+            max = fabs(v[i]);
+    }
+    return max;
+}
+
 void multicontact_thread::move()
 {
+    // to limit joint velocity
+    yarp::sig::Vector new_delta = output-input;
+
+    double factor = 0.005;
+//     std::cout<<norm(delta)<<std::endl;
+    if(norm(new_delta) > factor)
+    {
+        new_delta = new_delta/norm(new_delta)*factor;
+    }
+
+    
+    double alpha = 0.3;
+    new_delta = alpha*delta + (1.0-alpha)*new_delta;
+    delta = new_delta;
+    output = input + delta;
+
+//     std::cout<<abs_max(delta)<<std::endl;
+
     robot.move(output);
     input = output; // remove this line if you are using  robot.sensePosition()
 }
