@@ -32,6 +32,27 @@ using namespace yarp::os;
 using namespace yarp::sig;
 using namespace walkman;
 
+std::string green(std::string text)
+{
+	std::string g="\033[0;32m";
+	std::string b="\033[0m";
+	return g + text + b;
+}
+
+std::string yellow(std::string text)
+{
+	std::string y="\033[0;33m";
+	std::string b="\033[0m";
+	return y + text + b;
+}
+
+std::string red(std::string text)
+{
+	std::string r="\033[0;31m";
+	std::string b="\033[0m";
+	return r + text + b;
+}
+
 multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::ResourceFinder rf, std::shared_ptr< paramHelp::ParamHelperServer > ph):
 	control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"),
 	IK(get_robot_name(),get_urdf_path(),get_srdf_path(),get_thread_period()),
@@ -138,6 +159,8 @@ state_map.emplace("force",false)  ;
 
     // populate command list
 //     wb_cmd.add_command("idle");
+
+	setup_wb_ik();
 }
 
 bool multicontact_thread::custom_init()
@@ -343,9 +366,13 @@ bool multicontact_thread::custom_init()
 	SENSORS_FILTERED = Sensor_Collection ;
 	count_sensor = 0 ;
 
-	setup_wb_ik();
-	
-	std::cout<<" - Initialized"<<std::endl;
+	IK.initialize("wb_left",input);
+	initialized.at("wb_left")=true;
+	IK.initialize("wb_right",input);
+	initialized.at("wb_right")=true;
+	done = true;
+
+	std::cout<<" - " + green("Initialized")<<std::endl;
 
 	return true;
 }
@@ -374,13 +401,13 @@ void multicontact_thread::send_to_service2() {
   sending_q_vect.resize( input.size() ) ;
   sending_q_vect = input ;
   sending_q.write() ;
-  std::cout << " q_to_service_2 = " << input.toString() << std::endl ;
+//   std::cout << " q_to_service_2 = " << input.toString() << std::endl ;
 
   yarp::sig::Vector &sending_fc_vect = sending_fc.prepare() ;
   sending_fc_vect.resize( FC_to_world.size() ) ;
   sending_fc_vect = FC_to_world ;
   sending_fc.write() ;
-  std::cout << "FC_to_service_2 = " << FC_to_world.toString() << std::endl  ;
+//   std::cout << "FC_to_service_2 = " << FC_to_world.toString() << std::endl  ;
    
 }
 
@@ -403,24 +430,26 @@ void multicontact_thread::read_from_service2() {
 
 void multicontact_thread::run()
 {
-    utils_1.tic() ;
+//     utils_1.tic() ;
     sense();
-    std::cout<<"after sense" << std::endl ;
 
     send_to_service2();
-    std::cout<<"after sending ports" << std::endl ;
-    
+
     read_from_service2();
-    std::cout<<"after reading ports" << std::endl ;
-    
+
     // get the command
     if(recv_interface.getCommand(msg,recv_num))
     {    
       SENSORS_AT_COMMAND = SENSORS_FILTERED;
       std::cout<<"Command received: "<<msg.command<<std::endl;
 
-        if(msg.command=="reset")
+	  if (msg.command=="stop") {
+		set_idle_state();
+	  }
+
+        else if(msg.command=="reset")
         {
+			set_state("wholebody_ik");
             go_in_initial_position();
             time=0;
         }
@@ -433,7 +462,14 @@ void multicontact_thread::run()
         //----------------------------------------------------------
 	// Hybrid Force/Position Commands!
         else if (msg.command=="touch") {
-	      set_state("touch");
+		set_state("touch");
+
+		std::cout<<"Touch: "<<std::endl;
+		
+		for(auto t:msg.touch)
+		{
+			if(t.second) std::cout<<" - "<<t.first<<std::endl;
+		}
 	}
 	//----------------------------------------------------------
 	// Control Force Commands!
@@ -452,15 +488,19 @@ void multicontact_thread::run()
             
         }
     }
-    std::cout<<"after command part" << std::endl ;
 
     control_law();
-    std::cout<<"after control law part" << std::endl ;
 
-    std::cout<<run_counter<< std::endl ; 
-    run_counter++ ;
+//     std::cout<<run_counter<< std::endl ; 
+//     run_counter++ ;
     move();
-    utils_1.toc() ;
+//     utils_1.toc() ;
+}
+
+void multicontact_thread::set_idle_state()
+{
+	for(auto& state:state_map)
+		state.second=false;
 }
 
 void multicontact_thread::set_state(std::string key) {
@@ -516,6 +556,8 @@ void multicontact_thread::sense()
     count_sensor += 1 ;
     
     contact_force_vector_computation() ;
+
+	broadcast_com_tf();
 }
 
 void multicontact_thread::contact_force_vector_computation() {
@@ -573,30 +615,40 @@ void multicontact_thread::control_law()
       current_chain = "wb_right";
       IK.set_desired_wb_poses_as_current(current_chain);
 	
-      if(!(SENSORS_FILTERED[2] - SENSORS_AT_COMMAND[2] <= -DELTA_F_MAX)) {
-	IK.get_desired_wb_poses(current_chain,touch_poses);
-	touch_poses["l_sole"].p += KDL::Vector(0.0,0.0,-0.005);
-	IK.set_desired_wb_poses(current_chain,touch_poses);
-	if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
-	  output = input;
-      } else {
-	output = input;
-	state_map["touch"] = false;
+      if(!(SENSORS_FILTERED[2] - SENSORS_AT_COMMAND[2] <= -DELTA_F_MAX)) 
+      {
+		IK.get_desired_wb_poses(current_chain,touch_poses);
+		touch_poses["l_sole"].p += KDL::Vector(0.0,0.0,-0.005);
+		IK.set_desired_wb_poses(current_chain,touch_poses);
+		if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
+			output = input;
+      } 
+      else 
+	  {
+		output = input;
+		state_map["touch"] = false;
+		std::cout<<"-- " + green("touch done")<<std::endl;
       }
-    } else if(msg.touch.at("r_sole")) {   // going in touch with the right foot
+    } 
+    else if(msg.touch.at("r_sole")) 
+	{   // going in touch with the right foot
       
       current_chain = "wb_left";
       IK.set_desired_wb_poses_as_current(current_chain);
       
-      if(!(SENSORS_FILTERED[8] - SENSORS_AT_COMMAND[8] <= -DELTA_F_MAX)) {
-	IK.get_desired_wb_poses(current_chain,touch_poses);
-	touch_poses["r_sole"].p += KDL::Vector(0.0,0.0,-0.005);
-	IK.set_desired_wb_poses(current_chain,touch_poses);
-	if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
-	  output = input;
-      } else {
-	output = input;
-	state_map["touch"] = false;
+      if(!(SENSORS_FILTERED[8] - SENSORS_AT_COMMAND[8] <= -DELTA_F_MAX)) 
+	  {
+		IK.get_desired_wb_poses(current_chain,touch_poses);
+		touch_poses["r_sole"].p += KDL::Vector(0.0,0.0,-0.005);
+		IK.set_desired_wb_poses(current_chain,touch_poses);
+		if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
+			output = input;
+      }
+      else 
+	  {
+		output = input;
+		state_map["touch"] = false;
+		std::cout<<"-- " + green("touch done")<<std::endl;
       }
     } else {
       current_chain = "wb_left";
@@ -625,20 +677,25 @@ void multicontact_thread::control_law()
 	    output = input;
 	  if(!still_moving) {
 	    state_map["touch"] = false;
+		std::cout<<"-- " + green("touch done")<<std::endl;
 	  }
       } 
       else {
-	if(msg.touch.at("LSoftHand")) {	   // going in touch ONLY with the Left hand
-	  if(!(SENSORS_FILTERED[13] - SENSORS_AT_COMMAND[13] <= -DELTA_F_MAX)) {
+	if(msg.touch.at("LSoftHand")) 
+	{	   // going in touch ONLY with the Left hand
+	  if(!(SENSORS_FILTERED[13] - SENSORS_AT_COMMAND[13] <= -DELTA_F_MAX)) 
+	  {
 	    IK.get_desired_wb_poses(current_chain,touch_poses);
 	    touch_poses["LSoftHand"].p += KDL::Vector(0.0,0.0,-0.005);
 	    IK.set_desired_wb_poses(current_chain,touch_poses);
 	    if (IK.cartToJnt(current_chain,input,output,0.001) == -1) 
 	      output = input;
 	  } 
-	  else {
+	  else 
+	  {
 	    output = input;
 	    state_map["touch"] = false;
+		std::cout<<"-- " + green("touch done")<<std::endl;
 	  }
 	}
 	if(msg.touch.at("RSoftHand")) {  // going in touch ONLY with the Right hand
@@ -652,6 +709,7 @@ void multicontact_thread::control_law()
 	  else {
 	    output = input;
 	    state_map["touch"] = false;
+		std::cout<<"-- " + green("touch done")<<std::endl;
 	  }
 	}
       }
@@ -685,6 +743,7 @@ void multicontact_thread::control_law()
 	else{  // if the right foot sense less than 3 kg do nothing (task realized!)
 	  output = input ;
 	  state_map["force"] = false;
+	  std::cout<<"-- " + green("force done")<<std::endl;
 	} 
     }
     else if (msg.command=="force_no_left"){ 
@@ -714,6 +773,7 @@ void multicontact_thread::control_law()
 	else {
 	output = input;
 	state_map["force"] = false;
+	std::cout<<"-- " + green("force done")<<std::endl;
 	}     
     } 
     else {
@@ -732,29 +792,31 @@ void multicontact_thread::move()
 // Stuff fromm wholebody_ik_wb_module_thread
 void multicontact_thread::control_law_ik()
 {
-    time = time + get_thread_period()/1000.0;
+	time = time + get_thread_period()/1000.0;
 
 	if(initialized.at(current_chain) && !done)
 	{
 		if(time > exec_time)
 		{
-			std::cout<<" -- done"<<std::endl;
+			std::cout<<"-- " + green("WB IK done")<<std::endl;
 			done=true;
 		}
 
 		KDL::Twist next_twist;
-		
+		next_poses.clear();
+
 		for(auto traj_gen:traj_gens)
 		{
 			if(msg.desired_poses.count(traj_gen.first))
 			{
-				if(traj_types.at(traj_gen.first)==0)
+				if(traj_gen.first=="COM" ||  traj_types.at(traj_gen.first)==0)
 					traj_gen.second.line_trajectory(time,next_poses[traj_gen.first],next_twist);
 				else if(traj_types.at(traj_gen.first)==1)
-					traj_gen.second.square_trajectory(time,next_poses[traj_gen.first],next_twist);
+					traj_gen.second.square_trajectory(time,msg.height,next_poses[traj_gen.first],next_twist);
 			}
 		}
 
+		IK.set_desired_wb_poses_as_current(current_chain);
 		IK.set_desired_wb_poses(current_chain,next_poses);
 
 		yarp::sig::Vector out(output.size(),0.0);
@@ -763,37 +825,54 @@ void multicontact_thread::control_law_ik()
 		if(cart_error==-1)
 		{
 			std::cout<<" !! ERROR in IK !! ( "<<current_chain<<" ) -> I won't move."<<std::endl;
+			IK.update_model(current_chain,input); //to reset
 			done=true;
 			return;
 		}
 
 		output = out;
-    }
+	}
 
-    if(going_to_initial_position)
-    {
-        std::cout<<" - going_to_initial_position -"<<std::endl;
-
-        double alpha = (time>5.0)?1:time/5.0;
-        output = (1-alpha)*q_init + (alpha)*home;
-        if(time>5.0)
-        {
-            going_to_initial_position = false;
-            std::cout<<" - Ready"<<std::endl;
-        }
-    }
+	if(going_to_initial_position)
+	{
+		double alpha = (time>5.0)?1:time/5.0;
+		output = (1-alpha)*q_init + (alpha)*home;
+		if(time>5.0)
+		{
+			going_to_initial_position = false;
+			std::cout<<"-- " + green("Ready")<<std::endl;
+			IK.update_model(current_chain,input); //to update
+		}
+	}
 }
 
 
 bool multicontact_thread::generate_poses_from_cmd()
 {
-    if( std::find(available_commands.begin(), available_commands.end(), msg.command)==available_commands.end() )
-    {
-        std::cout<<" !! ERROR: command not available !!"<<std::endl;
-        return false;
-    }
-
-    if(msg.command=="com_on_left")
+	if( std::find(available_commands.begin(), available_commands.end(), msg.command)==available_commands.end() )
+	{
+// 		std::cout<<" !! ERROR: command not available !!"<<std::endl;
+		return false;
+	}
+	
+	done=false;
+	
+	if(msg.command=="switch")
+	{
+		if(msg.frame=="l_sole")
+		{
+			current_chain = "wb_left";
+		}
+		if(msg.frame=="r_sole")
+		{
+			current_chain = "wb_right";
+		}
+		IK.update_model(current_chain,input);
+		done=true;
+		return true;
+	}
+	
+	if(msg.command=="com_on_left")
 	{
 		current_chain = "wb_left";
 	}
@@ -807,37 +886,37 @@ bool multicontact_thread::generate_poses_from_cmd()
 		IK.initialize(current_chain,input);
 		initialized.at(current_chain)=true;
 	}
-
+	
 	IK.update_model(current_chain,input);
 	IK.get_current_wb_poses(current_chain,initial_poses);
-
-	if(msg.command!="poses")
+	
+	if( std::find(special_commands.begin(), special_commands.end(), msg.command)!=special_commands.end() )
 	{
 		double offset_x=0;
 		double offset_y=0;
 		double offset_z=0;
-
+		
 		if(msg.command=="hands_up") offset_z=0.1;
 		else if(msg.command=="hands_down") offset_z=-0.1;
 		else if(msg.command=="hands_forward") offset_x=0.1;
 		else if(msg.command=="hands_backward") offset_x=-0.1;
 		else if(msg.command=="hands_wide") offset_y=-0.1;
 		else if(msg.command=="hands_tight") offset_y=0.1;
-
+		
 		msg.desired_poses["LSoftHand"] = initial_poses.at("LSoftHand") * KDL::Frame(KDL::Rotation::RPY(0,0,0),KDL::Vector(offset_z,-offset_y,-offset_x)); // :3
 		msg.desired_poses["RSoftHand"] = initial_poses.at("RSoftHand") * KDL::Frame(KDL::Rotation::RPY(0,0,0),KDL::Vector(offset_z,offset_y,-offset_x));
 		msg.desired_poses["l_sole"] = initial_poses.at("l_sole");
 		msg.desired_poses["r_sole"] = initial_poses.at("r_sole");
-
+		
 		double com_offset_x=0;
 		double com_offset_y=0;
 		double com_offset_z=0;
-
+		
 		if(msg.command=="com_up") com_offset_z=0.1;
 		else if(msg.command=="com_down") com_offset_z=-0.1;
 		
 		msg.desired_poses["COM"] = initial_poses.at("COM") * KDL::Frame(KDL::Rotation::RPY(0,0,0),KDL::Vector(com_offset_x,com_offset_y,com_offset_z));
-
+		
 		if(msg.command=="com_on_left")
 		{
 			msg.desired_poses.at("COM").p.x(0.0);
@@ -853,36 +932,37 @@ bool multicontact_thread::generate_poses_from_cmd()
 			msg.desired_poses.at("RSoftHand").p.y(-0.35);
 		}
 	}
-
+	
 	IK.set_desired_wb_poses_as_current(current_chain);
-
-	exec_time = duration;
-
+	
+	exec_time = msg.duration;
+	
 	reset_traj_types();
-
+	
+	if(msg.command=="poses") std::cout<<"Request: "<<std::endl;
+	
 	for(auto pose:msg.desired_poses)
 	{
-		if(msg.command=="poses") traj_types[pose.first] = msg.traj_type;
-
+		if(msg.command=="poses")
+		{
+			std::cout<<" - "<<pose.first<<std::endl;
+			if(pose.first!="COM") traj_types[pose.first] = msg.traj_type; //com is always linear
+		}
+		
 		if(traj_types.at(pose.first)==0)
 		{
-			traj_gens.at(pose.first).line_initialize(duration,initial_poses.at(pose.first),pose.second);
+			traj_gens.at(pose.first).line_initialize(exec_time,initial_poses.at(pose.first),pose.second);
 		}
 		else if(traj_types.at(pose.first)==1)
 		{
-			exec_time = square_duration;
-			traj_gens.at(pose.first).square_initialize(square_duration,initial_poses.at(pose.first),pose.second);
+			exec_time = msg.duration*3;
+			traj_gens.at(pose.first).square_initialize(exec_time,initial_poses.at(pose.first),pose.second);
 		}
 	}
 
-	if(msg.desired_poses.count("COM"))
-	{
-		traj_gens.at("COM").line_initialize(duration,initial_poses.at("COM"),msg.desired_poses.at("COM"));
-	}
+	time=0;
 	
-	done=false;
-
-    return true;
+	return true;
 }
 
 
@@ -902,23 +982,23 @@ void multicontact_thread::setup_wb_ik() {
   
 	chains.push_back("wb_left");
 	chains.push_back("wb_right");
-
+	
 	base_frames["wb_left"] = "l_sole";
 	base_frames["wb_right"] = "r_sole";
-
+	
 	for(auto frame:base_frames)
 	{
 		base_indeces[frame.first] = model.iDyn3_model.getLinkIndex(frame.second);
 		initialized[frame.first] = false;
 	}
-
+	
 	current_chain = "wb_left";
-
+	
 	ee_names.push_back("LSoftHand");
 	ee_names.push_back("RSoftHand");
 	ee_names.push_back("l_sole");
 	ee_names.push_back("r_sole");
-
+	
 	for(auto name:ee_names)
 	{
 		ee_indeces.emplace(name,model.iDyn3_model.getLinkIndex(name));
@@ -927,8 +1007,8 @@ void multicontact_thread::setup_wb_ik() {
 	}
 	traj_gens["COM"];
 	traj_types["COM"] = 0;
-
-	available_commands.push_back("poses");
+	
+	
 	available_commands.push_back("hands_up");
 	available_commands.push_back("hands_down");
 	available_commands.push_back("hands_forward");
@@ -939,6 +1019,24 @@ void multicontact_thread::setup_wb_ik() {
 	available_commands.push_back("com_on_right");
 	available_commands.push_back("com_up");
 	available_commands.push_back("com_down");
+	
+	for(auto cmd:available_commands) special_commands.push_back(cmd);
+	
+	available_commands.push_back("switch");
+// 	available_commands.push_back("touch");
+	available_commands.push_back("poses");
 
 	square_duration = duration * 3.0;
+}
+
+void multicontact_thread::broadcast_com_tf()
+{
+	if(initialized.at(current_chain))
+	{
+		tf::Transform transform;
+		IK.get_current_wb_poses(current_chain,initial_poses);
+		tf::transformKDLToTF(initial_poses.at("COM"),transform);
+		br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), base_frames.at(current_chain), "COM"));
+		ros::spinOnce();
+	}
 }

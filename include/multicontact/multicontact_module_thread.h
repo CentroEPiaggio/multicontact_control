@@ -194,6 +194,7 @@ namespace walkman
         bool going_to_initial_position=false;
 
         std::vector<std::string> available_commands;
+		std::vector<std::string> special_commands;
         bool generate_poses_from_cmd();
 
 	
@@ -221,10 +222,11 @@ namespace walkman
 	
 	std::map<std::string,bool> state_map;
 	void set_state(std::string key);
+	void set_idle_state();
 
 	bool is_state_active(std::string key);
 	
-	const double DELTA_F_MAX = 10.0; // threshold on force
+	const double DELTA_F_MAX = 50.0; // threshold on force
 	std::map<std::string,KDL::Frame> touch_poses;
         
 	double mg = 1200 ;
@@ -236,6 +238,9 @@ namespace walkman
 	//
 	walkman::log_utils::data_logger log_input;
 // 	walkman::log_utils::data_logger log_output;
+
+	tf::TransformBroadcaster br;
+	void broadcast_com_tf();
     public:
         /**
         * @brief constructor
