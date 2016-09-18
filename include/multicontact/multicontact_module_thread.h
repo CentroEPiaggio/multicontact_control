@@ -197,6 +197,7 @@ namespace walkman
 		std::vector<std::string> special_commands;
         bool generate_poses_from_cmd();
 
+    bool generate_touch_poses();
 	
 	double time = 0;
         double duration = 5.0;
@@ -226,7 +227,8 @@ namespace walkman
 
 	bool is_state_active(std::string key);
 	
-	const double DELTA_F_MAX = 50.0; // threshold on force
+	const double DELTA_F_MAX = 10.0; // threshold on force
+	const double Z_OFFSET = -0.1; // z displacement for touching control
 	std::map<std::string,KDL::Frame> touch_poses;
         
 	double mg = 1200 ;
@@ -236,8 +238,11 @@ namespace walkman
 	double mg_hands = hands_part*mg ;
 	double regu_filter = 1E9 ; 
 	//
-	walkman::log_utils::data_logger log_input;
-// 	walkman::log_utils::data_logger log_output;
+	walkman::log_utils::data_logger log_sense;
+    walkman::log_utils::data_logger log_1;
+    walkman::log_utils::data_logger log_2;
+	walkman::log_utils::data_logger log_3;
+    walkman::log_utils::data_logger log_4;
 
 	tf::TransformBroadcaster br;
 	void broadcast_com_tf();
