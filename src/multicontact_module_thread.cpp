@@ -176,7 +176,9 @@ bool multicontact_thread::custom_init()
     // setup
     model.iDyn3_model.setFloatingBaseLink(model.left_leg.end_effector_index);
     sense();
-    output = input = robot.sensePosition();
+    input = robot.sensePosition();
+	input[model.iDyn3_model.getDOFIndex("WaistLat")] = 0.0;
+	output = input;
 
     q_init = input;
     
