@@ -26,6 +26,8 @@
 #include <yarp/math/Math.h>
 #include <yarp/math/SVD.h>
 
+#include "math_utilities.hpp"
+
 #define DEG2RAD M_PI/180.0 //to be multiplied
 
 using namespace yarp::math;
@@ -180,7 +182,17 @@ bool multicontact_thread::custom_init()
     log_2.start("q_delta_1.txt");
     log_3.start("q_delta_2.txt");
     log_4.start("q_output_2.txt");
-
+    log_errore_cartesiano["COM"].start("error_COM.txt");
+    log_errore_cartesiano["r_sole"].start("error_r_sole.txt");
+    log_errore_cartesiano["l_sole"].start("error_l_sole.txt");
+    log_errore_cartesiano["RSoftHand"].start("error_RSoftHand.txt");
+    log_errore_cartesiano["LSoftHand"].start("error_LSoftHand.txt");
+    errore_cartesiano["COM"] = KDL::Frame::Identity();
+    errore_cartesiano["r_sole"] = KDL::Frame::Identity();
+    errore_cartesiano["l_sole"] = KDL::Frame::Identity();
+    errore_cartesiano["RSoftHand"] = KDL::Frame::Identity();
+    errore_cartesiano["LSoftHand"] = KDL::Frame::Identity();
+    
     run_counter = 0 ;
     //  real time thread
     struct sched_param thread_param;
@@ -820,15 +832,28 @@ void multicontact_thread::control_law_ik()
 
 		KDL::Twist next_twist;
 		next_poses.clear();
-
+		
+		errore_cartesiano.clear();
+		
 		for(auto traj_gen:traj_gens)
 		{
 			if(msg.desired_poses.count(traj_gen.first))
 			{
 				if(traj_gen.first=="COM" ||  traj_types.at(traj_gen.first)==0)
-					traj_gen.second.line_trajectory(time,next_poses[traj_gen.first],next_twist);
-				else if(traj_types.at(traj_gen.first)==1)
-					traj_gen.second.square_trajectory(time,msg.height,next_poses[traj_gen.first],next_twist);
+				{
+				  traj_gen.second.line_trajectory(time,next_poses[traj_gen.first],next_twist);
+				  IK.get_current_ee_pose("COM",errore_cartesiano["COM"]);
+				  errore_cartesiano["COM"] = next_poses["COM"].Inverse()*errore_cartesiano["COM"]; 
+				  yarp::sig::Vector temp_log_vec(3,0.0);
+				 math_utilities::vectorKDLToYARP(errore_cartesiano["COM"].p,temp_log_vec);
+				  log_errore_cartesiano["COM"].logYarpVector(temp_log_vec);
+				}
+				else if(traj_types.at(traj_gen.first)==1) 
+				{
+				  traj_gen.second.square_trajectory(time,msg.height,next_poses[traj_gen.first],next_twist);
+				  IK.get_current_ee_pose(traj_gen.first,errore_cartesiano[traj_gen.first]);
+				  errore_cartesiano[traj_gen.first] = next_poses[traj_gen.first].Inverse()*errore_cartesiano[traj_gen.first]; 
+				}
 			}
 		}
 

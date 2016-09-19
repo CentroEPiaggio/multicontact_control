@@ -243,6 +243,8 @@ namespace walkman
     walkman::log_utils::data_logger log_2;
 	walkman::log_utils::data_logger log_3;
     walkman::log_utils::data_logger log_4;
+std::map<std::string,walkman::log_utils::data_logger> log_errore_cartesiano;
+std::map<std::string,KDL::Frame> errore_cartesiano; 
 
 	tf::TransformBroadcaster br;
 	void broadcast_com_tf();
