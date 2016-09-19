@@ -846,7 +846,30 @@ bool multicontact_thread::generate_poses_from_cmd()
 	}
 	
 	done=false;
-	
+
+	if(msg.command=="head_up" || msg.command=="head_down" || msg.command=="head_left" || msg.command=="head_right")
+	{
+		double yaw_amount = 0.0;
+		double pitch_amount = 0.0;
+		double disp = 0.1;
+
+		if(msg.command=="head_up") pitch_amount = -disp;
+		if(msg.command=="head_down") pitch_amount = disp;
+		if(msg.command=="head_left") yaw_amount = disp;
+		if(msg.command=="head_right") yaw_amount = -disp;
+
+		time=0;
+		exec_time=1.0;
+
+		q_init = input;
+
+		q_desired = q_init;
+		q_desired[model.iDyn3_model.getDOFIndex("NeckPitchj")] = q_desired[model.iDyn3_model.getDOFIndex("NeckPitchj")] + pitch_amount;
+		q_desired[model.iDyn3_model.getDOFIndex("NeckYawj")] = q_desired[model.iDyn3_model.getDOFIndex("NeckYawj")] + yaw_amount;
+
+		return true;
+	}
+
 	if(msg.command=="switch")
 	{
 		if(msg.frame=="l_sole")
@@ -1076,6 +1099,10 @@ void multicontact_thread::setup_wb_ik() {
 	
 	available_commands.push_back("switch");
 	available_commands.push_back("poses");
+	available_commands.push_back("head_up");
+	available_commands.push_back("head_down");
+	available_commands.push_back("head_left");
+	available_commands.push_back("head_right");
 
 	square_duration = duration * 3.0;
 }
