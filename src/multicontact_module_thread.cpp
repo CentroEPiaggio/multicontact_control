@@ -123,6 +123,7 @@ state_map.emplace("force",false)  ;
     output.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     home.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     q_init.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
+	q_desired.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
     delta.resize(model.iDyn3_model.getNrOfDOFs(),0.0);
 
     yarp::sig::Vector q_right_arm(7,0.0);
@@ -810,54 +811,28 @@ void multicontact_thread::control_law_ik()
 {
 	time = time + get_thread_period()/1000.0;
 
-	if(initialized.at(current_chain) && !done)
-	{
-		if(time > exec_time) //TODO remove
-		{
-			std::cout<<"-- " + green("WB IK done")<<std::endl;
-			done=true;
-		}
-
-		KDL::Twist next_twist;
-		next_poses.clear();
-
-		for(auto traj_gen:traj_gens)
-		{
-			if(msg.desired_poses.count(traj_gen.first))
-			{
-				if(traj_gen.first=="COM" ||  traj_types.at(traj_gen.first)==0)
-					traj_gen.second.line_trajectory(time,next_poses[traj_gen.first],next_twist);
-				else if(traj_types.at(traj_gen.first)==1)
-					traj_gen.second.square_trajectory(time,msg.height,next_poses[traj_gen.first],next_twist);
-			}
-		}
-
-		IK.set_desired_wb_poses_as_current(current_chain);
-		IK.set_desired_wb_poses(current_chain,next_poses);
-
-		yarp::sig::Vector out(output.size(),0.0);
-		double cart_error = IK.cartToJnt(current_chain,input,out,0.005);
-
-		if(cart_error==-1)
-		{
-			std::cout<<" !! ERROR in IK !! ( "<<current_chain<<" ) -> I won't move."<<std::endl;
-			IK.update_model(current_chain,input); //to reset
-			done=true;
-			return;
-		}
-
-		output = out;
-	}
-
 	if(going_to_initial_position)
 	{
 		double alpha = (time>5.0)?1:time/5.0;
-		output = (1-alpha)*q_init + (alpha)*home;
+		output = (1-alpha)*q_init + (alpha)*q_desired;
 		if(time>5.0)
 		{
 			going_to_initial_position = false;
 			std::cout<<"-- " + green("Ready")<<std::endl;
 			IK.update_model(current_chain,input); //to update
+			done=true;
+		}
+	}
+	else if(!done)
+	{
+		double alpha = (time>exec_time)?1:time/exec_time;
+		output = (1-alpha)*q_init + (alpha)*q_desired;
+		if(time>exec_time)
+		{
+			going_to_initial_position = false;
+			std::cout<<"-- " + green("Done")<<std::endl;
+			IK.update_model(current_chain,input); //to update
+			done=true;
 		}
 	}
 }
@@ -956,7 +931,10 @@ bool multicontact_thread::generate_poses_from_cmd()
 	reset_traj_types();
 	
 	if(msg.command=="poses") std::cout<<"Request: "<<std::endl;
-	
+	next_poses.clear();
+
+	IK.get_current_wb_poses(current_chain,next_poses);
+
 	for(auto pose:msg.desired_poses)
 	{
 		if(msg.command=="poses")
@@ -964,20 +942,25 @@ bool multicontact_thread::generate_poses_from_cmd()
 			std::cout<<" - "<<pose.first<<std::endl;
 			if(pose.first!="COM") traj_types[pose.first] = msg.traj_type; //com is always linear
 		}
-		
-		if(traj_types.at(pose.first)==0)
-		{
-			traj_gens.at(pose.first).line_initialize(exec_time,initial_poses.at(pose.first),pose.second);
-		}
-		else if(traj_types.at(pose.first)==1)
-		{
-			exec_time = msg.duration*3;
-			traj_gens.at(pose.first).square_initialize(exec_time,initial_poses.at(pose.first),pose.second);
-		}
+
+		next_poses.at(pose.first) = pose.second;
+	}
+
+	IK.set_desired_wb_poses(current_chain,next_poses);
+
+	double cart_error = IK.cartToJnt(current_chain,input,q_desired,0.005);
+	
+	if(cart_error==-1)
+	{
+		std::cout<<" !! ERROR in IK !! ( "<<current_chain<<" ) -> I won't move."<<std::endl;
+		IK.update_model(current_chain,input); //to reset
+		done=true;
+		return false;
 	}
 
 	time=0;
-	
+
+	q_init = input;
 	return true;
 }
 
@@ -1019,9 +1002,17 @@ bool multicontact_thread::generate_touch_poses()
     for(auto pose:msg.desired_poses)
     {
         if(msg.touch.at(pose.first)) std::cout<<" - "<<pose.first<<std::endl;
-
-        traj_gens.at(pose.first).line_initialize(exec_time,initial_poses.at(pose.first),pose.second);
     }
+
+    double cart_error = IK.cartToJnt(current_chain,input,q_desired,0.005);
+
+	if(cart_error==-1)
+	{
+		std::cout<<" !! ERROR in IK !! ( "<<current_chain<<" ) -> I won't move."<<std::endl;
+		IK.update_model(current_chain,input); //to reset
+		done=true;
+		return false;
+	}
 
     time=0;
 
@@ -1032,6 +1023,7 @@ void multicontact_thread::go_in_initial_position()
 {
     q_init = input;
     going_to_initial_position = true;
+	q_desired = home;
 }
 
 void multicontact_thread::reset_traj_types()
@@ -1063,10 +1055,8 @@ void multicontact_thread::setup_wb_ik() {
 	for(auto name:ee_names)
 	{
 		ee_indeces.emplace(name,model.iDyn3_model.getLinkIndex(name));
-		traj_gens[name];
 		traj_types[name] = 0;
 	}
-	traj_gens["COM"];
 	traj_types["COM"] = 0;
 	
 	

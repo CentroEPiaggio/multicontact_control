@@ -156,6 +156,7 @@ namespace walkman
         yarp::sig::Vector output;
         yarp::sig::Vector home;
         yarp::sig::Vector q_init;
+		yarp::sig::Vector q_desired;
 	
     int waist_index ;
     int l_ankle_index ;
@@ -214,7 +215,6 @@ namespace walkman
 	std::map<std::string,int> ee_indeces;
 	std::map<std::string,KDL::Frame> initial_poses;
 	std::map<std::string,KDL::Frame> next_poses;
-	std::map<std::string,trajectory_generator> traj_gens;
 	std::map<std::string,int> traj_types;
 	std::map<std::string,bool> initialized;
 	bool done = false;
