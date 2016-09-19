@@ -829,7 +829,6 @@ void multicontact_thread::control_law_ik()
 		output = (1-alpha)*q_init + (alpha)*q_desired;
 		if(time>exec_time)
 		{
-			going_to_initial_position = false;
 			std::cout<<"-- " + green("Done")<<std::endl;
 			IK.update_model(current_chain,input); //to update
 			done=true;
@@ -993,6 +992,7 @@ bool multicontact_thread::generate_touch_poses()
         traj_types.at(t.first) = 0;
     }
     
+    IK.set_desired_wb_poses_as_current(current_chain);
     IK.set_desired_wb_poses(current_chain,msg.desired_poses);
     
     exec_time = msg.duration;
@@ -1016,6 +1016,7 @@ bool multicontact_thread::generate_touch_poses()
 
     time=0;
 
+    q_init = input;
     return true;
 }
 
