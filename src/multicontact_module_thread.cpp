@@ -54,6 +54,13 @@ std::string red(std::string text)
 	return r + text + b;
 }
 
+std::string cyan(std::string text)
+{
+	std::string c="\033[0;36m";
+	std::string b="\033[0m";
+	return c + text + b;
+}
+
 multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::ResourceFinder rf, std::shared_ptr< paramHelp::ParamHelperServer > ph):
 	control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"),
 	IK(get_robot_name(),get_urdf_path(),get_srdf_path(),get_thread_period()),
@@ -462,6 +469,7 @@ void multicontact_thread::run()
 
 	  if (msg.command=="stop") {
 		set_idle_state();
+		std::cout<<"-- " + cyan(" >> STOP << ")<<std::endl;
 	  }
 
         else if(msg.command=="reset")
