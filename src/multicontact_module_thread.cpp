@@ -62,7 +62,7 @@ std::string cyan(std::string text)
 }
 
 multicontact_thread::multicontact_thread( std::string module_prefix, yarp::os::ResourceFinder rf, std::shared_ptr< paramHelp::ParamHelperServer > ph):
-	control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"),
+	control_thread( module_prefix, rf, ph ), recv_interface("multicontact_interface"), ack_interface("multicontact_ack"),
 	IK(get_robot_name(),get_urdf_path(),get_srdf_path(),get_thread_period()),
 // size of q vectors
 	size_q(locoman::utils::getNumberOfKinematicJoints(robot)),
@@ -643,6 +643,7 @@ void multicontact_thread::control_law()
 		output = input;
 		state_map["touch"] = false;
 		std::cout<<"-- " + green("touch done")<<std::endl;
+		ack_interface.sendCommand("touch done",cmd_num++);
       }
     } 
     else if(msg.touch.at("r_sole")) 
@@ -657,6 +658,7 @@ void multicontact_thread::control_law()
 		output = input;
 		state_map["touch"] = false;
 		std::cout<<"-- " + green("touch done")<<std::endl;
+		ack_interface.sendCommand("touch done",cmd_num++);
       }
     } else {
 
@@ -675,6 +677,7 @@ void multicontact_thread::control_law()
 	  if(!still_moving) {
 	    state_map["touch"] = false;
 		std::cout<<"-- " + green("touch done")<<std::endl;
+		ack_interface.sendCommand("touch done",cmd_num++);
 	  }
       } 
       else {
@@ -689,6 +692,7 @@ void multicontact_thread::control_law()
 	    output = input;
 	    state_map["touch"] = false;
 		std::cout<<"-- " + green("touch done")<<std::endl;
+		ack_interface.sendCommand("touch done",cmd_num++);
 	  }
 	}
 	if(msg.touch.at("RSoftHand")) {  // going in touch ONLY with the Right hand
@@ -699,6 +703,7 @@ void multicontact_thread::control_law()
 	    output = input;
 	    state_map["touch"] = false;
 		std::cout<<"-- " + green("touch done")<<std::endl;
+		ack_interface.sendCommand("touch done",cmd_num++);
 	  }
 	}
       }
@@ -733,6 +738,7 @@ void multicontact_thread::control_law()
 	  output = input ;
 	  state_map["force"] = false;
 	  std::cout<<"-- " + green("force done")<<std::endl;
+	  ack_interface.sendCommand("force done",cmd_num++);
 	} 
     }
     else if (msg.command=="force_no_left"){ 
@@ -763,6 +769,7 @@ void multicontact_thread::control_law()
 	output = input;
 	state_map["force"] = false;
 	std::cout<<"-- " + green("force done")<<std::endl;
+	ack_interface.sendCommand("force done",cmd_num++);
 	}     
     } 
     else {
@@ -840,6 +847,7 @@ void multicontact_thread::control_law_ik()
 			std::cout<<"-- " + green("Done")<<std::endl;
 			IK.update_model(current_chain,input); //to update
 			done=true;
+			ack_interface.sendCommand("done",cmd_num++);
 		}
 	}
 }

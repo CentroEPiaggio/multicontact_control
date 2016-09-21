@@ -65,6 +65,7 @@ namespace walkman
       
     utils utils_1;
     walkman::yarp_custom_command_interface<multicontact_msg> recv_interface;
+	walkman::yarp_command_sender_interface ack_interface;
     wholebody_ik IK;
     unsigned int size_q;
    
@@ -148,6 +149,7 @@ namespace walkman
 	//
         multicontact_msg msg;
         int recv_num=0;
+		int cmd_num=0;
 	
 	
 	void control_law();
