@@ -886,6 +886,41 @@ bool multicontact_thread::generate_poses_from_cmd()
 		return true;
 	}
 
+	if(msg.command=="torso_up" || msg.command=="torso_down" || msg.command=="torso_left" || msg.command=="torso_right" || msg.command=="torso_pitch" || msg.command=="torso_yaw")
+    {
+        time=0;
+        exec_time=1.0;
+
+        q_init = input;
+
+        q_desired = q_init;
+        
+        double yaw_amount = 0.0;
+        double pitch_amount = 0.0;
+        double disp = 0.1;
+
+        if(msg.command=="torso_up") pitch_amount = -disp;
+        if(msg.command=="torso_down") pitch_amount = disp;
+        if(msg.command=="torso_left") yaw_amount = disp;
+        if(msg.command=="torso_right") yaw_amount = -disp;        
+        
+        q_desired[model.iDyn3_model.getDOFIndex("WaistSag")] = q_desired[model.iDyn3_model.getDOFIndex("WaistSag")] + pitch_amount;
+        q_desired[model.iDyn3_model.getDOFIndex("WaistYaw")] = q_desired[model.iDyn3_model.getDOFIndex("WaistYaw")] + yaw_amount;
+
+        if(msg.command=="torso_pitch")
+        {
+            q_desired[model.iDyn3_model.getDOFIndex("WaistSag")] = DEG2RAD* msg.deg_amount;
+            exec_time=3.0;
+        }
+        if(msg.command=="torso_yaw")
+        {
+            q_desired[model.iDyn3_model.getDOFIndex("WaistYaw")] = DEG2RAD* msg.deg_amount;
+            exec_time=3.0;
+        }
+
+        return true;
+    }
+
 	if(msg.command=="switch")
 	{
 		if(msg.frame=="l_sole")
@@ -1119,6 +1154,13 @@ void multicontact_thread::setup_wb_ik() {
 	available_commands.push_back("head_down");
 	available_commands.push_back("head_left");
 	available_commands.push_back("head_right");
+    available_commands.push_back("torso_up");
+    available_commands.push_back("torso_down");
+    available_commands.push_back("torso_left");
+    available_commands.push_back("torso_right");
+    available_commands.push_back("torso_pitch");
+    available_commands.push_back("torso_yaw");
+
 
 	square_duration = duration * 3.0;
 }

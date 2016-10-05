@@ -229,8 +229,8 @@ namespace walkman
 
 	bool is_state_active(std::string key);
 	
-	const double DELTA_F_MAX = 10.0; // threshold on force
-	const double Z_OFFSET = -0.1; // z displacement for touching control
+	const double DELTA_F_MAX = 30.0; // threshold on force
+	const double TOUCH_OFFSET = -0.1; // z displacement for touching control
 	std::map<std::string,KDL::Frame> touch_poses;
         
 	double mg = 1200 ;
