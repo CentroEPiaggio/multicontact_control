@@ -1062,7 +1062,16 @@ bool multicontact_thread::generate_touch_poses()
     msg.desired_poses.clear();
     for(auto t:msg.touch)
     {
-        msg.desired_poses[t.first] = KDL::Frame(KDL::Rotation::Identity(),KDL::Vector(0,0,(t.second)?Z_OFFSET:0)) * initial_poses.at(t.first);
+//         msg.desired_poses[t.first] = KDL::Frame(KDL::Rotation::Identity(),KDL::Vector(0,0,(t.second)?Z_OFFSET:0)) * initial_poses.at(t.first); // old solution, w.r.t. base
+
+        if(t.second)
+        {
+            if(t.first=="l_sole") msg.desired_poses[t.first] = initial_poses.at(t.first) * KDL::Frame(KDL::Rotation::Identity(),KDL::Vector(0,0,TOUCH_OFFSET));
+            if(t.first=="r_sole") msg.desired_poses[t.first] = initial_poses.at(t.first) * KDL::Frame(KDL::Rotation::Identity(),KDL::Vector(0,0,TOUCH_OFFSET));
+            if(t.first=="LSoftHand") msg.desired_poses[t.first] = initial_poses.at(t.first) * KDL::Frame(KDL::Rotation::Identity(),KDL::Vector(0,TOUCH_OFFSET,0));
+            if(t.first=="RSoftHand") msg.desired_poses[t.first] = initial_poses.at(t.first) * KDL::Frame(KDL::Rotation::Identity(),KDL::Vector(0,-TOUCH_OFFSET,0));
+        }
+
         traj_types.at(t.first) = 0;
     }
     
